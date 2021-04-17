@@ -3,8 +3,8 @@
 #Ignore VS code
 .vscode/
 
-#Ignore raw-data text files. Don't want these in our repo...
-*.txt 
+#Ignore raw-data text files in data. Don't want these in our repo...
+data/**/**.txt
 
 ##################################
 # Default python .gitignore
