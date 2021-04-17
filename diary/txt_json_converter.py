@@ -4,7 +4,7 @@ class NonComformingTextException(Exception):
     '''Raised when a .txt file does not match the expected format'''
     pass
 
-def txt_to_json(f, key_close=']', value_close='['):
+def txt_to_json(f):
     '''Return the content of file 'f' as JSON
     
     This function assumes text files have the following format:
@@ -16,23 +16,34 @@ def txt_to_json(f, key_close=']', value_close='['):
     '''
     myJson = {}
     key = None
+    category = "none"
+    value = ''
     for line in f:
-        if '[' or ']' in line:
-            if key:
-                myJson[key] = value
-            key = re.sub(r'[\[\]]',r'',line.strip())
-            if key in myJson:
-                raise NonComformingTextException(f'Key {key} declared multiple times')
-            value = ''
-        else:
-            if not key:
-                raise NonComformingTextException('Key not declared before text')
+        if line.strip():
+            match = re.match(r'\[([^\]]*)\]', line.strip())
+            if match:
+                if key:
+                    myJson[key][category] = value
+                key = match.group(1)
+
+                if key in myJson:
+                    raise NonComformingTextException(f'Key {key} declared multiple times')
+                category = "none"
+                myJson[key] = {}
+                value = ''
             else:
-                value.append(line.strip())
-
-def main():
-    import unittest
-    unittest.main()
-
-if __name__=="__main__":
-    main()        
+                matchCategory = re.match(r'\(([^\)]*)\)', line.strip())
+                if matchCategory:
+                    category = matchCategory.group(1)
+                    if category == "none":
+                        raise NonComformingTextException(f'"none" is a reserved category name')
+                    elif category in myJson[key]:
+                        raise NonComformingTextException(f'Category {category} declared multiple times')
+                else:
+                    if key:
+                        value += line.strip()
+                    else:
+                        raise NonComformingTextException('Key not declared before text')
+    if key:
+        myJson[key][category] = value
+    return myJson
