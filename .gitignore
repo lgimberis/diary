@@ -1,8 +1,13 @@
 ## CUSTOM ##
 
+#Ignore VS code
+.vscode/
+
+#Ignore raw-data text files. Don't want these in our repo...
+*.txt 
+
 ##################################
 # Default python .gitignore
-
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
