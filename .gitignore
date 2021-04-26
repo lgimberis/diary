@@ -6,6 +6,9 @@
 #Ignore raw-data text files in data. Don't want these in our repo...
 data/**/**.txt
 
+#Ignore directories ending in temp
+*temp/
+
 ##################################
 # Default python .gitignore
 # Byte-compiled / optimized / DLL files
