@@ -5,13 +5,13 @@ import os
 import json
 import re
 from io import StringIO as SI
-from ..txt_json_converter import txt_to_json, json_to_txt
+from ..txt_json_converter import txt_to_dict, dict_to_txt
 
-class TestTxtToJSON(unittest.TestCase):
+class TestTxtToDict(unittest.TestCase):
     def testDatabase(self):
-        '''Confirm that the output of txt_to_json for each txt file in test database matches expected JSON output
+        '''Confirm that the output of txt_to_dict for each txt file in test database matches expected JSON output
         '''
-        dataDirectory = os.path.join(os.path.dirname(__file__), "data", "txt_json_converter")
+        dataDirectory = os.path.join(os.path.dirname(__file__), "data", "txt_dict_converter")
         txtFiles = glob(os.path.join(dataDirectory,"*.txt"))
         jsonFiles = glob(os.path.join(dataDirectory,"*.json"))
 
@@ -19,16 +19,16 @@ class TestTxtToJSON(unittest.TestCase):
         for txtFilename, jsonFilename in zip(txtFiles, jsonFiles):
             with self.subTest(txtFilename=txtFilename, jsonFilename=jsonFilename):
                 with open(txtFilename) as txtFile:
-                    output = txt_to_json(txtFile)
+                    output = txt_to_dict(txtFile)
                 with open(jsonFilename) as jsonFile:
                     jsonOutput = json.load(jsonFile)
                 self.assertEqual(output, jsonOutput, f"\nOutput from {txtFilename} does not match {jsonFilename}\n{output}\n{jsonOutput}")
 
-class TestJsonToTxt(unittest.TestCase):
+class TestDictToTxt(unittest.TestCase):
     def testDatabase(self):
-        '''Confirm that the output of json_to_txt for each JSON file in test database matches expected txt output
+        '''Confirm that the output of dict_to_txt for each JSON file in test database matches expected txt output
         '''
-        dataDirectory = os.path.join(os.path.dirname(__file__), "data", "txt_json_converter")
+        dataDirectory = os.path.join(os.path.dirname(__file__), "data", "txt_dict_converter")
         txtFiles = glob(os.path.join(dataDirectory,"*.txt"))
         jsonFiles = glob(os.path.join(dataDirectory,"*.json"))
 
@@ -36,7 +36,7 @@ class TestJsonToTxt(unittest.TestCase):
         for txtFilename, jsonFilename in zip(txtFiles, jsonFiles):
             with self.subTest(txtFilename=txtFilename, jsonFilename=jsonFilename):
                 with open(jsonFilename) as jsonFile:
-                    output = re.sub('\n','',json_to_txt(jsonFile))
+                    output = re.sub('\n','',dict_to_txt(json.load(jsonFile)))
                 with open(txtFilename) as txtFile:
                     txtOutput = ''
                     for line in txtFile:
