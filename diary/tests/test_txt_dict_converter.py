@@ -5,7 +5,7 @@ import os
 import json
 import re
 from io import StringIO as SI
-from ..txt_json_converter import txt_to_dict, dict_to_txt
+from ..txt_dict_converter import txt_to_dict, dict_to_txt
 
 class TestTxtToDict(unittest.TestCase):
     def testDatabase(self):

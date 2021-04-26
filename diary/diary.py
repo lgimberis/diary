@@ -5,11 +5,13 @@ from io import StringIO
 import json
 import os
 from pathlib import Path
+import platform
+import subprocess
 
 from cryptography.fernet import InvalidToken
 
 from .encrypt import Encryptor
-from .txt_json_converter import txt_to_dict, dict_to_txt
+from .txt_dict_converter import txt_to_dict, dict_to_txt
 
 class Diary:
     """Primary diary database management class
@@ -111,7 +113,7 @@ class Diary:
                 # doc = subprocess.Popen(["start", "/WAIT", filename], shell=True)
                 # while doc.poll() is None:
                 #     sleep(0.1)
-                editor_session = subprocess.run(['start', txt_filename], check=True, shell=True)
+                subprocess.run(['start', "/WAIT", filename], check=True, shell=True)
             else:
                 #TODO
                 raise OSError("Does not support non-Windows systems yet")
