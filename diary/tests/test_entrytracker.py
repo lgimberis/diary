@@ -92,11 +92,11 @@ class EntryTrackerTester(unittest.TestCase):
         with self.subTest(msg="EntryCategory:__len__"):
             self.assertEqual(len(et["Key 2"]["Category"]), 43)
             self.assertEqual(len(et["Key 2"][None]), 12)
-        #Check that our file is mentioned in the contributors for each category
-        self.assertEqual(et["Key 1"].get_contributors_with_lengths(), {"mytestfile":27})
-        self.assertEqual(et["Key 2"].get_contributors_with_lengths(), {"mytestfile":55})
-        self.assertEqual(et["Key 2"]["Category"].get_contributors_with_lengths(), {"mytestfile":43})
-        self.assertEqual(et["Key 2"][None].get_contributors_with_lengths(), {"mytestfile":12})
+        #Check that our file is mentioned in the sources for each category
+        self.assertEqual(et["Key 1"].get_sources_with_lengths(), {"mytestfile":27})
+        self.assertEqual(et["Key 2"].get_sources_with_lengths(), {"mytestfile":55})
+        self.assertEqual(et["Key 2"]["Category"].get_sources_with_lengths(), {"mytestfile":43})
+        self.assertEqual(et["Key 2"][None].get_sources_with_lengths(), {"mytestfile":12})
 
     def testAddTwoFiles(self):
         """Ensure that we can add two files and have everything work correctly.
@@ -106,15 +106,15 @@ class EntryTrackerTester(unittest.TestCase):
         et = self.__create_two_files()
 
         with self.subTest(msg="New data for existing key"):
-            self.assertEqual(et["Key 1"].get_contributors_with_lengths(), 
+            self.assertEqual(et["Key 1"].get_sources_with_lengths(), 
                 {"first_file_name":100, "second_file_name":14})
-            self.assertEqual(et["Key 3"].get_contributors_with_lengths(),
+            self.assertEqual(et["Key 3"].get_sources_with_lengths(),
                 {"first_file_name":48, "second_file_name":45})
         with self.subTest(msg="New data for existing category"):
-            self.assertEqual(et["Key 3"]["Category 3"].get_contributors_with_lengths(),
+            self.assertEqual(et["Key 3"]["Category 3"].get_sources_with_lengths(),
                 {"first_file_name":28, "second_file_name":45})
         with self.subTest(msg="New key and category"):
-            self.assertEqual(et["Key 6"]["Category 5"].get_contributors_with_lengths(),
+            self.assertEqual(et["Key 6"]["Category 5"].get_sources_with_lengths(),
                 {"second_file_name":36})
 
     def testUpdateFile(self):
@@ -146,7 +146,7 @@ class EntryTrackerTester(unittest.TestCase):
         et.add_file(amended_first_file_dict, "first_file_name.txt")
 
         with self.subTest(msg="Modify existing key and category"):
-            self.assertEqual(et["Key 1"][None].get_contributors_with_lengths(),
+            self.assertEqual(et["Key 1"][None].get_sources_with_lengths(),
                 {"first_file_name":25, "second_file_name":14})
 
         with self.subTest(msg="Remove single-contributor category"):
@@ -155,22 +155,22 @@ class EntryTrackerTester(unittest.TestCase):
         with self.subTest(msg="Remove existing key and category"):
             self.assertTrue("Key 3" in et)
             self.assertTrue("Category 3" in et["Key 3"])
-            self.assertEqual(et["Key 3"].get_contributors_with_lengths(),
+            self.assertEqual(et["Key 3"].get_sources_with_lengths(),
                 {"second_file_name":45})
 
         with self.subTest(msg="Add a brand-new key and category"):
             self.assertTrue("Key _" in et)
             self.assertTrue("My Category" in et["Key _"])
-            self.assertEqual(et["Key _"]["My Category"].get_contributors_with_lengths(),
+            self.assertEqual(et["Key _"]["My Category"].get_sources_with_lengths(),
                 {"first_file_name":23})
 
         with self.subTest(msg="Add an existing key"):
             self.assertTrue(None in et["Key 6"])
-            self.assertEqual(et["Key 6"].get_contributors_with_lengths(),
+            self.assertEqual(et["Key 6"].get_sources_with_lengths(),
                 {"first_file_name":42, "second_file_name":36})
 
         with self.subTest(msg="Add an existing key and category"):
-            self.assertEqual(et["Key 6"]["Category 5"].get_contributors_with_lengths(),
+            self.assertEqual(et["Key 6"]["Category 5"].get_sources_with_lengths(),
                 {"first_file_name":27, "second_file_name":36})
 
 def main():

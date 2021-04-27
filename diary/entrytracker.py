@@ -1,94 +1,72 @@
 
 TOTALS_KEY_NAME = "_Totals"
 
-class EntryCategory:
+class Entry:
     """Base class for tracking metadata.
 
-    EntryCategory objects have a list of contributors which each contribute
+    Entry objects have a list of sources which each contribute
     an amount of characters.
-    The total over all contributors is kept in self.length.
+    The total over all sources is kept in self.size.
     """
     def __init__(self):
-        self.contributors = {}
-        self.length = 0
+        self.children = {}
+        self.sources = {}
+        self.size = 0
 
-    def add_contributor(self, name, value):
-        """Add given contributor, adjusting self.length accordingly.
+    def add_source(self, source, size, *children):
+        """Add given source, adjusting self.size accordingly.
         """
-        self.contributors[name] = value
-        self.length += value
+        if len(children) > 0:
+            for child in children:
+                if child not in self.children:
+                    self.children[child] = Entry()
+                self.children[child].add_source(source, size)
+
+        if source in self.sources:
+            self.sources[source] += size
+        else:
+            self.sources[source] = size
+        self.size += size
     
-    def remove_contributor(self, name):
-        """Remove given contributor, adjusting self.length accordingly.
+    def remove_source(self, source):
+        """Remove given source, adjusting self.size accordingly.
 
         """
-        value = self.contributors[name]
-        self.length -= value
-        self.contributors.pop(name)
+        size = self.sources[source]
+        self.size -= size
+        self.sources.pop(source)
+
+        to_remove = {child:False for child in self.children}
+        for child in self.children:
+            if source in self.children[child].get_sources():
+                self.children[child].remove_source(source)
+                if len(self.children[child]) == 0:
+                    #Remove children that have had all their data removed
+                    to_remove[child] = True
+        for child in to_remove:
+            if to_remove[child]:
+                self.children.pop(child)
 
     def __len__(self):
-        return self.length
-
-    def __getitem__(self, key):
-        return self.contributors[key]
-
-    def get_contributors(self):
-        """Get the names of all contributors in a list.
-
-        """
-        return list(self.contributors.keys())
-
-    def get_contributors_with_lengths(self):
-        """Get the names of all contributors and their contributions in a dict.
-
-        """
-        return self.contributors
-
-
-class EntryKey(EntryCategory):
-    """EntryKey tracks collections of metadata.
-
-    """
-    def __init__(self):
-        self.categories = {}
-        super().__init__()
+        return self.size
 
     def __contains__(self, item):
-        return item in self.categories
+        return item in self.children
 
-    def __getitem__(self, key):
-        return self.categories[key]
+    def __getitem__(self, item):
+        return self.children[item]
 
-    def add_contributor(self, name, value, category):
-        #Add to the given category
-        if category not in self.categories:
-            self.categories[category] = EntryCategory()
-        self.categories[category].add_contributor(name, value)
+    def get_sources(self):
+        """Get the names of all sources in a list.
 
-        #Update contributors
-        if name in self.contributors:
-            self.contributors[name] += value
-        else:
-            self.contributors[name] = value
-        self.length += value
+        """
+        return list(self.sources.keys())
 
-    def remove_contributor(self, name):
-        super().remove_contributor(name)
-        toRemove = {key:False for key in self.categories}
-        for category in self.categories:
-            if name in self.categories[category].get_contributors():
-                self.categories[category].remove_contributor(name)
-                if len(self.categories[category]) == 0:
-                    toRemove[category] = True
-        for category in toRemove:
-            if toRemove[category]:
-                self.categories.pop(category)
+    def get_sources_with_lengths(self):
+        """Get the names of all sources and their contributions in a dict.
 
-    def __recalculate_length(self):
-        length = 0
-        for key in self.categories:
-            length += len(self.categories[key])
-        self.length = length
+        """
+        return self.sources
 
 
 class EntryFile:
@@ -113,13 +91,13 @@ class EntryTracker:
     """
     def __init__(self):
         self.files = {}
-        self.keys = {}
+        self.entries = {}
 
     def __contains__(self, item):
-        return item in self.keys
+        return item in self.entries
 
     def __getitem__(self, item):
-        return self.keys[item]
+        return self.entries[item]
 
     def add_file(self, dictionary, filename):
         """Add the given file to the metadata tracker
@@ -131,15 +109,15 @@ class EntryTracker:
         if basename in self.files:
             for contribution in self.files[basename].get_contributions():
                 if contribution != TOTALS_KEY_NAME:
-                    self.keys[contribution].remove_contributor(basename)
+                    self.entries[contribution].remove_source(basename)
 
         #Add the file's entry
         self.files[basename] = EntryFile(dictionary)
 
-        #Add keys and categories
+        #Add keys and children
         for key in dictionary:
             for category in dictionary[key]:
-                if key not in self.keys:
-                    self.keys[key] = EntryKey()
-                self.keys[key].add_contributor(basename, 
+                if key not in self.entries:
+                    self.entries[key] = Entry()
+                self.entries[key].add_source(basename, 
                     len(dictionary[key][category]), category)
