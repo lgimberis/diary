@@ -16,7 +16,7 @@ def txt_to_dict(f):
     '''
     mydict = {}
     key = None
-    category = "none"
+    category = None
     value = ''
     for line in f:
         if line.strip():
@@ -31,7 +31,7 @@ def txt_to_dict(f):
 
                 if key in mydict:
                     raise NonComformingTextException(f'Key {key} declared multiple times')
-                category = "none"
+                category = None
                 value = ''
             else:
                 matchCategory = re.match(r'\(([^\)]*)\)', line.strip())
@@ -43,8 +43,8 @@ def txt_to_dict(f):
                             mydict[key] = {category:value}
                         value = ''
                     category = matchCategory.group(1)
-                    if category == "none":
-                        raise NonComformingTextException(f'"none" is a reserved category name')
+                    if category == None:
+                        raise NonComformingTextException(f'None is a reserved category name')
                     elif key in mydict and category in mydict[key]:
                         raise NonComformingTextException(f'Category {category} declared multiple times')
                 else:
@@ -71,10 +71,10 @@ def dict_to_txt(dictionary):
             txtFile += '\n'
         txtFile += '['+key+']'
         thisKey = dictionary[key]
-        if "none" in thisKey:
-            txtFile += '\n'+thisKey["none"]
+        if None in thisKey:
+            txtFile += '\n'+thisKey[None]
         for category in thisKey:
-            if category != "none":
+            if category != None:
                 txtFile += '\n('+category+')'
                 txtFile += '\n'+thisKey[category]
     return txtFile
