@@ -7,6 +7,7 @@ import subprocess
 
 from .encrypt import Encryptor
 from .txt_dict_converter import txt_to_dict, dict_to_txt
+from .entrytracker import EntryTracker
 
 
 class Diary:
@@ -44,7 +45,12 @@ class Diary:
         return self
 
     def __exit__(self, t, v, tb):
-        pass
+        #Update our master diary database file
+        tmp_root_file_name = self.root_file+"_tmp"
+        with open(tmp_root_file_name, mode='xb') as f:
+            f.write(self.encryptor.get_salt()+b'\n')
+            f.write(self.encryptor.encrypt(bytes(self.et)))
+        os.replace(tmp_root_file_name, self.root_file)
 
     @staticmethod
     def __get_password(confirm=False):
@@ -82,23 +88,18 @@ class Diary:
             if self.create:
                 salt = None
             else:
-                salt = next(f)
-                # Remove trailing newline
-                #        salt = salt[:salt.index(b"\n")]
-                salt = salt[:-1]
+                salt = next(f)[:-1]
 
             self.encryptor = Encryptor(self.password_UTF8, salt)
 
             if self.create:
                 f.write(self.encryptor.get_salt() + b'\n')
+                self.et = EntryTracker()
             else:
-                # Read in existing metadata
-                # TODO
-                pass
+                self.et = EntryTracker(self.encryptor.decrypt(next(f)) )
+                #TODO make sure we can convert the bytes to our expected object
 
-        if self.create:
-            # With the act of creation complete, remove our creation tag
-            self.create = False
+        self.create = False
 
     def __edit_txt_file(self, filename):
         """Open filename with the provided editor.
@@ -141,12 +142,10 @@ class Diary:
         self.__edit_txt_file(txt_filename)
 
         # Once finished, catalogue our changes
-        # TODO
-
-        # Pack up our .txt into a .dat file
         with open(txt_filename, mode='r') as f:
-            self.__pack(f, packed_filename)
-
+            file_dict = txt_to_dict(f)
+        self.et.add_file(file_dict, txt_filename)
+        self.__pack(file_dict, packed_filename)
         if delete:
             # Remove our .txt file
             os.remove(txt_filename)
@@ -165,10 +164,11 @@ class Diary:
         date_today = datetime.date.today()
         self.get_entry(date_today)
 
-    def __pack(self, f, destination):
-        """Convert text file f to JSON, encrypt it, and store it into the destination file.
+    def __pack(self, file_dict, destination):
+        """Write argument into destination as encrypted bytes.
+        
         """
-        content = json.dumps(txt_to_dict(f))
+        content = json.dumps(file_dict)
         with open(destination, mode='wb') as packed_f:
             packed_f.write(self.encryptor.encrypt(content.encode('utf-8')))
 
