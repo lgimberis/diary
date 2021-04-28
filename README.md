@@ -11,6 +11,7 @@ It provides a CLI for interacting with its contents. Individual files can be edi
 Whenever files are not actively being edited, they will be encrypted.
 
 ## Usage
+Ensure that the [cryptography](https://pypi.org/project/cryptography/) library is installed.
 To use Diary, run the CLI via the following command from the directory that contains the diary module:
 `python -m diary.main [path]`
 where path is an optional argument containing the database root directory,
