@@ -4,34 +4,38 @@ import sys
 
 from .diary import Diary
 
+HELP_NAME = "Help"
+EXIT_NAME = "Exit"
+
+
 class Command:
-    def __init__(self, aliases, help, function, numargs):
+    def __init__(self, aliases, help_text, function, num_arguments):
         self.aliases = aliases
-        self.help = help
+        self.help = help_text
         self.function = function
-        self.numargs = numargs
+        self.num_arguments = num_arguments
+
+
+COMMANDS = OrderedDict([
+    (HELP_NAME, Command(["help", "h"], "Show this help", None, None)),
+    (EXIT_NAME, Command(["exit", "e"], "Stop Execution", None, None)),
+    ("Today", Command(["today", "t"], "Open today's entry", "today", 0)),
+    ("Date", Command(["date", "d"], "Open an entry corresponding to the given date", "get_entry", 1)),
+    ("Open", Command(["open", "o"], "Open a file of the given name", "get_file", 1)),
+])
+
 
 def main():
     """Use a CLI to the Diary module.
     """
 
-    HELP_NAME = "Help"
-    EXIT_NAME = "Exit"
-
-    COMMANDS = OrderedDict([
-        (HELP_NAME, Command(["help", "h"], "Show this help", None, None)),
-        (EXIT_NAME, Command(["exit", "e"], "Stop Execution", None, None)),
-        ("Today", Command(["today", "t"], "Open today's entry", "today", 0)),
-        ("Date", Command(["date", "d"], "Open an entry corresponding to the given date", "get_entry", 1)),
-        ("Open", Command(["open", "o"], "Open a file of the given name", "get_file", 1)),
-    ])
-
-    def help():
+    def help_text():
         """List all the commands.
         """
-        for command in COMMANDS:
-            alias_list = str(COMMANDS[command].aliases)[1:-1] #Remove '[' and ']' from string representation
-            print(f"{command} ({alias_list}) - {COMMANDS[command].help}")
+        for command_to_explain in COMMANDS:
+            # Remove '[' and ']' from string representation
+            alias_list = str(COMMANDS[command_to_explain].aliases)[1:-1]
+            print(f"{command_to_explain} ({alias_list}) - {COMMANDS[command_to_explain].help}")
 
     if len(sys.argv) > 1:
         root = os.path.abspath(sys.argv[1])
@@ -52,18 +56,19 @@ def main():
                         if command == HELP_NAME:
                             print_help = True
                         if COMMANDS[command].function:
-                            if len(response) == 1+COMMANDS[command].numargs:
+                            if len(response) == 1+COMMANDS[command].num_arguments:
                                 func = getattr(d, COMMANDS[command].function)
                                 func(*response[1:])
                             else:
-                                print(f"Expected {COMMANDS[command].numargs} arguments, got {len(response)-1}")
+                                print(f"Expected {COMMANDS[command].num_arguments} arguments, got {len(response) - 1}")
             else:
                 main_command = None
             if not call_found:
                 print("Command not recognised")
                 print_help = True
             if print_help:
-                help()
-            
-if __name__=="__main__":
+                help_text()
+
+
+if __name__ == "__main__":
     main()

@@ -1,17 +1,13 @@
 import datetime
 from getpass import getpass
-from glob import glob
-from io import StringIO
 import json
 import os
-from pathlib import Path
 import platform
 import subprocess
 
-from cryptography.fernet import InvalidToken
-
 from .encrypt import Encryptor
 from .txt_dict_converter import txt_to_dict, dict_to_txt
+
 
 class Diary:
     """Primary diary database management class
@@ -28,7 +24,7 @@ class Diary:
 
     ROOT_FILE_NAME = "diary.dat"
 
-    def __init__(self, root, editor=None, verbose=False):
+    def __init__(self, root: str, editor=None, verbose=False):
         """Given a root directory, find a diary database file, adjusting root if necessary.
 
         If no such file exists, create a new root directory in the given root.
@@ -40,7 +36,7 @@ class Diary:
         self.create = not os.path.isfile(self.root_file)
 
         self.editor = editor
-        if self.editor and self.editor not in ACCEPTED_EDITORS:
+        if self.editor and self.editor not in self.ACCEPTED_EDITORS:
             raise ValueError(f"Editor {self.editor} is not implemented")
 
     def __enter__(self):
@@ -50,16 +46,17 @@ class Diary:
     def __exit__(self, t, v, tb):
         pass
 
-    def __get_password(self, confirm=False):
+    @staticmethod
+    def __get_password(confirm=False):
         """Get the user's password from standard input.
         """
         password = getpass("Password: ")
         if confirm:
-            passwordsMatch = False
-            while not passwordsMatch:
-                repeatPassword = getpass("Repeat password: ")
-                passwordsMatch = (password == repeatPassword)
-                if not passwordsMatch:
+            passwords_match = False
+            while not passwords_match:
+                repeat_password = getpass("Repeat password: ")
+                passwords_match = (password == repeat_password)
+                if not passwords_match:
                     print("Passwords do not match. Please try again")
                     password = getpass("Password: ")
         return password
@@ -86,21 +83,21 @@ class Diary:
                 salt = None
             else:
                 salt = next(f)
-                #Remove trailing newline
+                # Remove trailing newline
                 #        salt = salt[:salt.index(b"\n")]
                 salt = salt[:-1]
 
             self.encryptor = Encryptor(self.password_UTF8, salt)
 
             if self.create:
-                f.write(self.encryptor.get_salt()+b'\n')
+                f.write(self.encryptor.get_salt() + b'\n')
             else:
-                #Read in existing metadata
-                #TODO
+                # Read in existing metadata
+                # TODO
                 pass
-        
+
         if self.create:
-            #With the act of creation complete, remove our creation tag
+            # With the act of creation complete, remove our creation tag
             self.create = False
 
     def __edit_txt_file(self, filename):
@@ -110,12 +107,9 @@ class Diary:
             pass
         else:
             if platform.system() == 'Windows':
-                # doc = subprocess.Popen(["start", "/WAIT", filename], shell=True)
-                # while doc.poll() is None:
-                #     sleep(0.1)
                 subprocess.run(['start', "/WAIT", filename], check=True, shell=True)
             else:
-                #TODO
+                # TODO
                 raise OSError("Does not support non-Windows systems yet")
 
     def get_file(self, prefix, subdirectory=None, delete=True):
@@ -128,33 +122,33 @@ class Diary:
         txt_filename = os.path.join(file_directory, f"{prefix}.txt")
         packed_filename = os.path.join(file_directory, f"{prefix}.dat")
 
-        #Look for an existing txt_filename
+        # Look for an existing txt_filename
         try:
-            with open(txt_filename, mode='r') as f:
+            with open(txt_filename, mode='r'):
                 pass
         except IOError:
-            #No .txt file, check for a .dat file we can unpack
+            # No .txt file, check for a .dat file we can unpack
             try:
                 with open(packed_filename, mode='rb') as f:
-                    #We found one; unpack it into a text file
+                    # We found one; unpack it into a text file
                     self.__unpack(f, txt_filename)
             except IOError:
-                #Create a new text file
-                with open(txt_filename, mode='w') as f:
+                # Create a new text file
+                with open(txt_filename, mode='w'):
                     pass
 
-        #Open our .txt file
+        # Open our .txt file
         self.__edit_txt_file(txt_filename)
 
-        #Once finished, catalogue our changes
-        #TODO
-        
-        #Pack up our .txt into a .dat file
+        # Once finished, catalogue our changes
+        # TODO
+
+        # Pack up our .txt into a .dat file
         with open(txt_filename, mode='r') as f:
             self.__pack(f, packed_filename)
-        
+
         if delete:
-            #Remove our .txt file
+            # Remove our .txt file
             os.remove(txt_filename)
 
     def get_entry(self, date):

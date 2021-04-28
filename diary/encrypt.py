@@ -6,7 +6,8 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 SALT_SIZE_BYTES = 16
-DEFAULT_ITERATIONS=100000
+DEFAULT_ITERATIONS = 100000
+
 
 class Encryptor:
     def __init__(self, password, salt=None):
@@ -23,22 +24,24 @@ class Encryptor:
             elif type(self.password) is not bytes:
                 raise TypeError(f"Type of password is {type(self.password)}, should be {bytes}")
 
-    def __random_salt(self):
+    @staticmethod
+    def __random_salt():
         """Get a random salt"""
         return os.urandom(SALT_SIZE_BYTES)
 
-    def __get_fernet(self, salt, password, iterations=DEFAULT_ITERATIONS):
-        '''Returns a Fernet object based on the given salt and password
-        
+    @staticmethod
+    def __get_fernet(salt, password, iterations=DEFAULT_ITERATIONS):
+        """Returns a Fernet object based on the given salt and password
+
         salt : bytes
         password : bytes
         iterations : integer
-        '''
+        """
         try:
-            kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=self.salt, iterations=iterations, )
+            kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=iterations, )
         except TypeError:
             raise TypeError("Arguments salt and password to __get_fernet ")
-        key = base64.urlsafe_b64encode(kdf.derive(self.password))
+        key = base64.urlsafe_b64encode(kdf.derive(password))
         return Fernet(key)
 
     def get_salt(self):
