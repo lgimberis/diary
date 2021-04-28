@@ -1,7 +1,8 @@
 ## CUSTOM ##
 
-#Ignore VS code
+#Ignore VS code and PyCharm
 .vscode/
+.idea/
 
 #Ignore local test directory
 data/
