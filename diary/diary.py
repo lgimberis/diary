@@ -1,19 +1,20 @@
 import datetime
-from getpass import getpass
 import json
 import os
+from pathlib import Path
 import platform
 import subprocess
+from getpass import getpass
 
 from .encrypt import Encryptor
-from .txt_dict_converter import txt_to_dict, dict_to_txt
 from .entrytracker import EntryTracker
+from .txt_dict_converter import txt_to_dict, dict_to_txt
 
 
 class Diary:
-    """Primary diary database management class
+    """Diary database management class. Operates based on a root directory.
 
-    Exposes the following functions to external managers:
+    Exposes the following functions:
     today - Return today's diary entry
     get_entry - Get the entry corresponding to a particular date
     get_file - Get any file with the given prefix (discard extension)
@@ -25,16 +26,44 @@ class Diary:
 
     ROOT_FILE_NAME = "diary.dat"
 
-    def __init__(self, root: str, editor=None, verbose=False):
-        """Given a root directory, find a diary database file, adjusting root if necessary.
+    def __init__(self, root: str, editor=None, verbose=False, may_create=True,
+                 may_overwrite=True, use_encryption=True):
+        """Given a root directory, prepare to set up a diary database.
 
         If no such file exists, create a new root directory in the given root.
         """
         self.verbose = verbose
 
         self.root = root
+        root_exists = os.path.isdir(self.root)
+        if not root_exists:
+            if not may_create:
+                raise OSError(f"Root directory {self.root} does not exist")
+            else:
+                os.makedirs(self.root)
+
         self.root_file = os.path.join(root, self.ROOT_FILE_NAME)
-        self.create = not os.path.isfile(self.root_file)
+        self.create_root_file = os.path.isfile(self.root_file)
+
+        if self.create_root_file
+            if not may_create:
+                raise OSError(f"Root file {self.root_file} does not exist")
+            else:
+                # If we're creating a root file, we normally expect an empty directory.
+                # If there are already files, we need to make sure we don't delete any
+                # important data without the User's knowledge.
+                # Get all files in the root directory as strings.
+                #TODO handle better via pathlib internals?
+                self.files_to_add = list([str(path) for path in Path(self.root).rglob("*")])
+                if self.root_file in self.files_to_add:
+                    self.files_to_add.remove(self.root_file)
+                if len(self.files_to_add) > 0:
+                    if not may_overwrite:
+                        raise OSError(f"Detected {len(self.files_to_add)} files in root"
+                                      f" directory {self.root}. Enable overwrite if desired.")
+                    else:
+                        print(f"Detected {len(self.files_to_add)} files in root. "
+                              f"These will be passed directly into the diary.")
 
         self.editor = editor
         if self.editor and self.editor not in self.ACCEPTED_EDITORS:
@@ -45,10 +74,14 @@ class Diary:
         return self
 
     def __exit__(self, t, v, tb):
-        #Update our master diary database file
-        tmp_root_file_name = self.root_file+"_tmp"
+        """Write to our master diary database file.
+
+        """
+        # Update our master diary database file
+        # TODO special handling if there is an Exception, no writing etc?
+        tmp_root_file_name = self.root_file + "_tmp"
         with open(tmp_root_file_name, mode='xb') as f:
-            f.write(self.encryptor.get_salt()+b'\n')
+            f.write(self.encryptor.get_salt() + b'\n')
             f.write(self.encryptor.encrypt(bytes(self.et)))
         os.replace(tmp_root_file_name, self.root_file)
 
@@ -74,10 +107,10 @@ class Diary:
          - set up self.encryptor, for reading/writing new entries
         """
 
-        self.password = self.__get_password(confirm=self.create)
+        self.password = self.__get_password(confirm=self.create_root_file)
         self.password_UTF8 = self.password.encode('utf-8')
 
-        if self.create:
+        if self.create_root_file:
             mode = 'x+b'
             if not os.path.isdir(self.root):
                 os.makedirs(self.root)
@@ -85,21 +118,21 @@ class Diary:
             mode = 'r+b'
 
         with open(self.root_file, mode=mode) as f:
-            if self.create:
+            if self.create_root_file:
                 salt = None
             else:
                 salt = next(f)[:-1]
 
             self.encryptor = Encryptor(self.password_UTF8, salt)
 
-            if self.create:
+            if self.create_root_file:
                 f.write(self.encryptor.get_salt() + b'\n')
                 self.et = EntryTracker()
             else:
-                self.et = EntryTracker(self.encryptor.decrypt(next(f)) )
-                #TODO make sure we can convert the bytes to our expected object
+                self.et = EntryTracker(self.encryptor.decrypt(next(f)))
+                # TODO make sure we can convert the bytes to our expected object
 
-        self.create = False
+        self.create_root_file = False
 
     def __edit_txt_file(self, filename):
         """Open filename with the provided editor.

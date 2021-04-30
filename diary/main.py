@@ -60,7 +60,8 @@ def main():
                                 func = getattr(d, COMMANDS[command].function)
                                 func(*response[1:])
                             else:
-                                print(f"Expected {COMMANDS[command].num_arguments} arguments, got {len(response) - 1}")
+                                print(f"Expected {COMMANDS[command].num_arguments} "
+                                      f"arguments, got {len(response) - 1}")
             else:
                 main_command = None
             if not call_found:

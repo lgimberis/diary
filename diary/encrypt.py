@@ -10,6 +10,7 @@ DEFAULT_ITERATIONS = 100000
 
 
 class Encryptor:
+
     def __init__(self, password, salt=None):
         self.password = password
         if salt:
@@ -49,7 +50,7 @@ class Encryptor:
 
     def encrypt(self, item):
         """Return an encrypted version of the argument
-        
+
         item : bytes
         """
         try:
@@ -59,9 +60,9 @@ class Encryptor:
 
     def decrypt(self, item):
         """Return a decrypted version of the argument.
-        
+
         item : bytes
-        
+
         May throw InvalidToken
         """
         try:
