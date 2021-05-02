@@ -1,16 +1,19 @@
 import unittest
 
-from ..encrypt import Encryptor
+from diary.encrypt import Encryptor
 
 
 class EncryptorTester(unittest.TestCase):
-    def testRoundTrip(self):
+
+    TEST_PASSWORD = "correctbatteryhorsestaple"
+    TEST_MESSAGE = "This is a test message."
+
+    def test_round_trip(self):
         """Check that the same password and salt can encrypt and decrypt a message
 
         """
-        password = "correctbatteryhorsestaple".encode('utf-8')
-        message = ("This is a test message. To be successful, "
-                   + "this round trip must return the exact same message.").encode('utf-8')
+        password = self.TEST_PASSWORD.encode('utf-8')
+        message = self.TEST_MESSAGE.encode('utf-8')
         encryptor = Encryptor(password)
         second_encryptor = Encryptor(password, encryptor.get_salt())
 
