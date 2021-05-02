@@ -6,9 +6,9 @@ import platform
 import subprocess
 from getpass import getpass
 
-from .encrypt import Encryptor
-from .entrytracker import EntryTracker
-from .txt_dict_converter import txt_to_dict, dict_to_txt
+from diary.encrypt import Encryptor
+# from diary.entrytracker import EntryTracker
+from diary.text_dict_converter import text_filename_to_dict, json_file_to_text
 
 
 class Diary:
@@ -43,9 +43,9 @@ class Diary:
                 os.makedirs(self.root)
 
         self.root_file = os.path.join(root, self.ROOT_FILE_NAME)
-        self.create_root_file = os.path.isfile(self.root_file)
+        self.create_root_file = not os.path.isfile(self.root_file)
 
-        if self.create_root_file
+        if self.create_root_file:
             if not may_create:
                 raise OSError(f"Root file {self.root_file} does not exist")
             else:
@@ -80,9 +80,9 @@ class Diary:
         # Update our master diary database file
         # TODO special handling if there is an Exception, no writing etc?
         tmp_root_file_name = self.root_file + "_tmp"
-        with open(tmp_root_file_name, mode='xb') as f:
+        with open(tmp_root_file_name, mode='wb') as f:
             f.write(self.encryptor.get_salt() + b'\n')
-            f.write(self.encryptor.encrypt(bytes(self.et)))
+            # f.write(self.encryptor.encrypt(bytes(self.et)))
         os.replace(tmp_root_file_name, self.root_file)
 
     @staticmethod
@@ -127,10 +127,10 @@ class Diary:
 
             if self.create_root_file:
                 f.write(self.encryptor.get_salt() + b'\n')
-                self.et = EntryTracker()
+                # self.et = EntryTracker()
             else:
-                self.et = EntryTracker(self.encryptor.decrypt(next(f)))
-                # TODO make sure we can convert the bytes to our expected object
+                # self.et = EntryTracker(self.encryptor.decrypt(next(f)))
+                pass
 
         self.create_root_file = False
 
@@ -175,9 +175,8 @@ class Diary:
         self.__edit_txt_file(txt_filename)
 
         # Once finished, catalogue our changes
-        with open(txt_filename, mode='r') as f:
-            file_dict = txt_to_dict(f)
-        self.et.add_file(file_dict, txt_filename)
+        file_dict = text_filename_to_dict(txt_filename)
+        # self.et.add_file(file_dict, txt_filename)
         self.__pack(file_dict, packed_filename)
         if delete:
             # Remove our .txt file
@@ -213,4 +212,4 @@ class Diary:
             content += line
         with open(destination, mode='w') as unpacked_f:
             decrypted_content = self.encryptor.decrypt(content).decode('utf-8')
-            unpacked_f.write(dict_to_txt(json.loads(decrypted_content)))
+            unpacked_f.write(json_file_to_text(decrypted_content))
