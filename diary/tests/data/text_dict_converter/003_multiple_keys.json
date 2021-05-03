@@ -1,8 +1,4 @@
 {
-	"Purpose": {
-		"": "Multiple Key Test"
-	},
-	"Flavour": {
-		"": "Strawberries"
-	}
+	"Purpose": "Multiple Key Test",
+	"Flavour": "Strawberries"
 }

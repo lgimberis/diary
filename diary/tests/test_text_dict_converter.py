@@ -4,7 +4,7 @@ import re
 import unittest
 from glob import glob
 
-from diary.text_dict_converter import text_filename_to_dict, json_filename_to_text
+from diary.text_dict_converter import TextDictConverter
 
 
 class TestTextToDict(unittest.TestCase):
@@ -17,10 +17,12 @@ class TestTextToDict(unittest.TestCase):
 
         self.assertEqual(len(text_files), len(json_files),
                          "Ensure there is a .json file for each .txt")
+
+        tdc = TextDictConverter('[', ']', '(', ')')
         for text_filename, json_filename in zip(text_files, json_files):
             test_name = text_filename.split(".")[0]
             with self.subTest(msg=test_name):
-                output = text_filename_to_dict(text_filename)
+                output = tdc.text_filename_to_dict(text_filename)
                 with open(json_filename) as jsonFile:
                     json_output = json.load(jsonFile)
                 self.assertEqual(output, json_output,
@@ -38,10 +40,12 @@ class TestDictToText(unittest.TestCase):
 
         self.assertEqual(len(text_files), len(json_files),
                          "Ensure there is a .txt file for each JSON")
+
+        tdc = TextDictConverter('[', ']', '(', ')')
         for text_filename, json_filename in zip(text_files, json_files):
             test_name = text_filename.split(".")[0]
             with self.subTest(msg=test_name):
-                output = re.sub('\n', '', json_filename_to_text(json_filename))
+                output = re.sub('\n', '', tdc.json_filename_to_text(json_filename))
                 with open(text_filename) as textFile:
                     text_output = ''
                     for line in textFile:

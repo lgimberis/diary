@@ -1,16 +1,10 @@
 {
-	"First Key": {
-		"": "Category-less text\nWhitespace",
-		"First Category": "More text here"
-	},
-	"Second Key": {
-		"Second Category": "My value",
-		"Third Category": "More text"
-	},
-	"Third Key": {
-		"": "More category-less text",
-		"Third Category": "Let's try re-using a category from a different key",
-		"Second Key": "How about a key name as a category?",
-		"Fourth category": "That will be all"
-	}
+	"First Key": "Category-less text\nWhitespace",
+	"First Key;First Category": "More text here",
+	"Second Key;Second Category": "My value",
+	"Second Key;Third Category": "More text",
+	"Third Key": "More category-less text",
+	"Third Key;Third Category": "Let's try re-using a category from a different key",
+	"Third Key;Second Key": "How about a key name as a category?",
+	"Third Key;Fourth category": "That will be all"
 }
