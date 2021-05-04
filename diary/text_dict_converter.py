@@ -165,7 +165,8 @@ class TextDictConverter:
             if category_level:
                 text_categories = text_categories[:category_level-1]
                 text_categories.append(category_name)
-                key = self.internal_category_separator.join(text_categories)
+                key = self.internal_category_separator.join(text_categories) \
+                    + self.internal_category_separator
             else:
                 # If the current line is not a category, it must be content
                 try:
@@ -220,9 +221,10 @@ class TextDictConverter:
             for (print_index, category) in enumerate(
                     current_categories[index:],
                     start=index):
-                prefix, suffix = self.formatter.get_level(print_index+1)
-                yield prefix + category + suffix
-                text_categories.append(category)
+                if category:
+                    prefix, suffix = self.formatter.get_level(print_index + 1)
+                    yield prefix + category + suffix
+                    text_categories.append(category)
 
             # Print the content of this key
             for line in this_key.split("\n"):
