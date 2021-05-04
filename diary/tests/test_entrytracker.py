@@ -1,7 +1,9 @@
 import unittest
 
 from diary.entrytracker import EntryTracker
-from diary.text_dict_converter import text_file_to_dict, NONE_CATEGORY_NAME
+from diary.text_dict_converter import TextDictConverter
+
+NONE_CATEGORY_NAME = ""
 
 
 class EntryTrackerTester(unittest.TestCase):
@@ -49,8 +51,9 @@ class EntryTrackerTester(unittest.TestCase):
         et = EntryTracker()
         first_file_content = self.example_file_two
         second_file_content = self.example_file_three
-        et.add_file("first_file_name.txt", text_file_to_dict(first_file_content))
-        et.add_file("second_file_name.txt", text_file_to_dict(second_file_content))
+        tdc = TextDictConverter("[", "]", "(", ")")
+        et.add_file("first_file_name.txt", tdc.text_file_to_dict(first_file_content))
+        et.add_file("second_file_name.txt", tdc.text_file_to_dict(second_file_content))
         return et
 
     def testAddFirstFile(self):
@@ -58,8 +61,9 @@ class EntryTrackerTester(unittest.TestCase):
 
         """
         et = EntryTracker()
+        tdc = TextDictConverter("[", "]", "(", ")")
         file_content = self.example_file_one
-        et.add_file("testfile.txt", text_file_to_dict(file_content))
+        et.add_file("testfile.txt", tdc.text_file_to_dict(file_content))
 
         # Ensure that we're tracking Key 1:None, Key 2:None, and Key 2:Category
         with self.subTest(msg="EntryTracker:__contains__"):
@@ -73,12 +77,12 @@ class EntryTrackerTester(unittest.TestCase):
             self.assertEqual(len(et["Key 2"]), 55)
         with self.subTest(msg="EntryCategory:__len__"):
             self.assertEqual(len(et["Key 2"]["Category"]), 43)
-            self.assertEqual(len(et["Key 2"][NONE_CATEGORY_NAME]), 12)
+            self.assertEqual(len(et["Key 2"][""]), 12)
         # Check that our file is mentioned in the sources for each category
         self.assertEqual(et["Key 1"].get_files(), {"testfile": 27})
         self.assertEqual(et["Key 2"].get_files(), {"testfile": 55})
         self.assertEqual(et["Key 2"]["Category"].get_files(), {"testfile": 43})
-        self.assertEqual(et["Key 2"][NONE_CATEGORY_NAME].get_files(), {"testfile": 12})
+        self.assertEqual(et["Key 2"][""].get_files(), {"testfile": 12})
 
     def testAddTwoFiles(self):
         """Ensure that we can add two files and have everything work correctly.
@@ -107,22 +111,25 @@ class EntryTrackerTester(unittest.TestCase):
         # As in the previous test, create a two-file database
         # This perfectly simulates an N-file database with 1 file that we will update
         et = self.__create_two_files()
+        ics = ';'
+        tdc = TextDictConverter("[", "]", "(", ")")
 
         # Make our changes to the first file
-        amended_first_file_dict = text_file_to_dict(self.example_file_two)
+        amended_first_file_dict = tdc.text_file_to_dict(self.example_file_two)
 
         # Modify existing key and category
-        amended_first_file_dict["Key 1"][NONE_CATEGORY_NAME] = "These words have changed."
+        amended_first_file_dict["Key 1"+ics] = "These words have changed."
         # Remove single-contributor category
-        amended_first_file_dict["Key 1"].pop("Category 1")
+        amended_first_file_dict.pop("Key 1"+ics+"Category 1"+ics)
         # Remove existing key and category
-        amended_first_file_dict.pop("Key 3")
+        amended_first_file_dict.pop("Key 3"+ics)
+        amended_first_file_dict.pop("Key 3"+ics+"Category 3"+ics)
         # Add a brand-new key and category
-        amended_first_file_dict["Key _"] = {"My Category": "Brand-new category text"}
+        amended_first_file_dict["Key _"+ics+"My Category"+ics] = "Brand-new category text"
         # Add existing key
-        amended_first_file_dict["Key 6"] = {NONE_CATEGORY_NAME: "Some extra text"}
+        amended_first_file_dict["Key 6"+ics] = "Some extra text"
         # Add an existing key and category
-        amended_first_file_dict["Key 6"]["Category 5"] = "Extra test for existing key"
+        amended_first_file_dict["Key 6"+ics+"Category 5"+ics] = "Extra test for existing key"
 
         # Re-add and ensure all the changes are reflected correctly
         et.add_file("first_file_name.txt", amended_first_file_dict)
