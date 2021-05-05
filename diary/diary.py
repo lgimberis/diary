@@ -34,36 +34,31 @@ class Diary:
         """
         self.verbose = verbose
 
-        self.root = root
-        root_exists = os.path.isdir(self.root)
-        if not root_exists:
+        # Either create the root directory, or exit.
+        self.root = Path(root)
+        if not self.root.is_dir():
             if not may_create:
                 raise OSError(f"Root directory {self.root} does not exist")
             else:
-                os.makedirs(self.root)
+                self.root.mkdir(parents=True)
 
-        self.root_file = os.path.join(root, self.ROOT_FILE_NAME)
-        self.create_root_file = not os.path.isfile(self.root_file)
+        self.root_file = Path(self.root, self.ROOT_FILE_NAME)
 
-        if self.create_root_file:
+        if not self.root_file.is_file():
             if not may_create:
                 raise OSError(f"Root file {self.root_file} does not exist")
-            else:
-                # If we're creating a root file, we normally expect an empty directory.
-                # If there are already files, we need to make sure we don't delete any
-                # important data without the User's knowledge.
-                # Get all files in the root directory as strings.
-                #TODO handle better via pathlib internals?
-                self.files_to_add = list([str(path) for path in Path(self.root).rglob("*")])
-                if self.root_file in self.files_to_add:
-                    self.files_to_add.remove(self.root_file)
-                if len(self.files_to_add) > 0:
-                    if not may_overwrite:
-                        raise OSError(f"Detected {len(self.files_to_add)} files in root"
-                                      f" directory {self.root}. Enable overwrite if desired.")
-                    else:
-                        print(f"Detected {len(self.files_to_add)} files in root. "
-                              f"These will be passed directly into the diary.")
+            # If we're creating a root file, we normally expect an empty directory.
+            # If there are already files, we need to make sure we don't delete any
+            # important data without the User's knowledge.
+            # Get all files in the root directory as strings.
+            # TODO actually use self.files_to_add
+            self.files_to_add = [path for path in self.root.iterdir()]
+            if len(self.files_to_add) > 0:
+                if not may_overwrite:
+                    raise OSError(f"Detected {len(self.files_to_add)} files in root"
+                                  f" directory {self.root}. Enable overwrite if desired.")
+                print(f"Detected {len(self.files_to_add)} files in root. "
+                      f"These will be passed directly into the diary.")
 
         self.editor = editor
         if self.editor and self.editor not in self.ACCEPTED_EDITORS:
@@ -79,11 +74,13 @@ class Diary:
         """
         # Update our master diary database file
         # TODO special handling if there is an Exception, no writing etc?
-        tmp_root_file_name = self.root_file + "_tmp"
-        with open(tmp_root_file_name, mode='wb') as f:
+        # TODO compute hash of temp and compare to dest?
+        # TODO finally remove tmp file?
+        tmp_root_file = self.root_file.with_suffix(self.root_file.suffix+"_tmp")
+        with tmp_root_file.open(mode='wb') as f:
             f.write(self.encryptor.get_salt() + b'\n')
             # f.write(self.encryptor.encrypt(bytes(self.et)))
-        os.replace(tmp_root_file_name, self.root_file)
+        self.root_file = tmp_root_file.replace(self.root_file)
 
     @staticmethod
     def __get_password(confirm=False):
@@ -106,81 +103,71 @@ class Diary:
         The meaning of 'opening' is currently to:
          - set up self.encryptor, for reading/writing new entries
         """
-
-        self.password = self.__get_password(confirm=self.create_root_file)
+        create = not self.root_file.is_file()
+        self.password = self.__get_password(confirm=create)
         self.password_UTF8 = self.password.encode('utf-8')
 
-        if self.create_root_file:
-            mode = 'x+b'
-            if not os.path.isdir(self.root):
-                os.makedirs(self.root)
+        if create:
+            mode = 'w+b'
         else:
             mode = 'r+b'
 
-        with open(self.root_file, mode=mode) as f:
-            if self.create_root_file:
+        with self.root_file.open(mode=mode) as f:
+            if create:
                 salt = None
             else:
                 salt = next(f)[:-1]
-
             self.encryptor = Encryptor(self.password_UTF8, salt)
 
-            if self.create_root_file:
+            if create:
                 f.write(self.encryptor.get_salt() + b'\n')
                 # self.et = EntryTracker()
             else:
                 # self.et = EntryTracker(self.encryptor.decrypt(next(f)))
                 pass
 
-        self.create_root_file = False
-
-    def __edit_txt_file(self, filename):
+    def __edit_txt_file(self, filepath: Path):
         """Open filename with the provided editor.
         """
         if self.editor:
             pass
         else:
             if platform.system() == 'Windows':
-                subprocess.run(['start', "/WAIT", filename], check=True, shell=True)
+                subprocess.run(['start', "/WAIT", str(filepath)], check=True, shell=True)
             else:
                 # TODO
                 raise OSError("Does not support non-Windows systems yet")
 
-    def get_file(self, prefix, subdirectory=None, delete=True):
+    def get_file(self, prefix: str, subdirectory=None, delete=True):
         """Extract and open a .txt file corresponding to the given filename prefix.
         """
         if subdirectory:
-            file_directory = os.path.join(self.root, subdirectory)
+            basename = Path(self.root, subdirectory, prefix)
         else:
-            file_directory = self.root
-        txt_filename = os.path.join(file_directory, f"{prefix}.txt")
-        packed_filename = os.path.join(file_directory, f"{prefix}.dat")
+            basename = Path(self.root, prefix)
+        txt_filename = basename.with_suffix(".txt")
+        packed_filename = basename.with_suffix(".dat")
 
         # Look for an existing txt_filename
-        try:
-            with open(txt_filename, mode='r'):
-                pass
-        except IOError:
-            # No .txt file, check for a .dat file we can unpack
-            try:
-                with open(packed_filename, mode='rb') as f:
-                    # We found one; unpack it into a text file
+        if not txt_filename.is_file():
+            if packed_filename.is_file():
+                # Create a text file form the packed file
+                with packed_filename.open(mode='rb') as f:
                     self.__unpack(f, txt_filename)
-            except IOError:
-                # Create a new text file
-                with open(txt_filename, mode='w'):
-                    pass
+            else:
+                # Create an empty text file
+                txt_filename.touch()
 
-        # Open our .txt file
+        # Open our .txt file with our chosen editor
         self.__edit_txt_file(txt_filename)
 
         # Once finished, catalogue our changes
-        file_dict = text_filename_to_dict(txt_filename)
+        file_dict = text_filename_to_dict(str(txt_filename))
         # self.et.add_file(file_dict, txt_filename)
         self.__pack(file_dict, packed_filename)
         if delete:
             # Remove our .txt file
-            os.remove(txt_filename)
+            txt_filename.unlink()
 
     def get_entry(self, date):
         """Open the file for the entry on the given date.
@@ -196,20 +183,20 @@ class Diary:
         date_today = datetime.date.today()
         self.get_entry(date_today)
 
-    def __pack(self, file_dict, destination):
+    def __pack(self, file_dict, destination: Path):
         """Write argument into destination as encrypted bytes.
         
         """
         content = json.dumps(file_dict)
-        with open(destination, mode='wb') as packed_f:
+        with destination.open(mode='wb') as packed_f:
             packed_f.write(self.encryptor.encrypt(content.encode('utf-8')))
 
-    def __unpack(self, f, destination):
+    def __unpack(self, f, destination: Path):
         """Decrypt file f, convert it to text from JSON, and store it into the destination file.
         """
         content = bytes()
         for line in f:
             content += line
-        with open(destination, mode='w') as unpacked_f:
+        with destination.open(mode='w') as unpacked_f:
             decrypted_content = self.encryptor.decrypt(content).decode('utf-8')
             unpacked_f.write(json_file_to_text(decrypted_content))

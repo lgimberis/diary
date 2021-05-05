@@ -1,8 +1,8 @@
-from collections import OrderedDict
 import json
 import re
 import typing
-
+from collections import OrderedDict
+from pathlib import Path
 
 FileOrString = typing.TypeVar("FileOrString", typing.TextIO, str)
 # Maximum number of category levels someone should ever need.
@@ -17,6 +17,7 @@ class TextDictConverter:
 
         Exposes get_level() and check_line().
         """
+
         def __init__(self, category_prefix, category_suffix, subcategory_prefix, subcategory_suffix):
             self.category_prefix = category_prefix
             self.category_suffix = category_suffix
@@ -44,12 +45,12 @@ class TextDictConverter:
             """
             if self.infinite:
                 return (
-                    self.prefix_extension_prefix*n
+                    self.prefix_extension_prefix * n
                     + self.category_prefix
-                    + self.prefix_extension_suffix*n,
-                    self.suffix_extension_prefix*n
+                    + self.prefix_extension_suffix * n,
+                    self.suffix_extension_prefix * n
                     + self.category_suffix
-                    + self.suffix_extension_suffix*n)
+                    + self.suffix_extension_suffix * n)
             else:
                 if n == 1:
                     return self.category_prefix, self.category_suffix
@@ -82,7 +83,7 @@ class TextDictConverter:
                 check = True
 
             if check:
-                for level in range(1, max_level+1):
+                for level in range(1, max_level + 1):
                     regex = self.__get_regex(level)
                     if match := re.match(regex, line):
                         return level, match.group(1)
@@ -127,11 +128,11 @@ class TextDictConverter:
             subcategory_prefix, subcategory_suffix)
         self.internal_category_separator = separator
 
-    def text_filename_to_dict(self, filename: str) -> OrderedDict:
-        """Return the content of the file named 'filename' as OrderedDict.
+    def text_filename_to_dict(self, filepath: Path) -> OrderedDict:
+        """Return the content of the file named 'filepath' as OrderedDict.
 
         """
-        with open(filename, mode='r') as f:
+        with filepath.open(mode='r') as f:
             return self.text_file_to_dict(f)
 
     def text_file_to_dict(self, f: FileOrString) -> OrderedDict:
@@ -161,10 +162,10 @@ class TextDictConverter:
         for line in file_content_list:
             category_level, category_name = self.formatter.check_line(line)
             if category_level:
-                text_categories = text_categories[:category_level-1]
+                text_categories = text_categories[:category_level - 1]
                 text_categories.append(category_name)
                 key = self.internal_category_separator.join(text_categories) \
-                    + self.internal_category_separator
+                      + self.internal_category_separator
             else:
                 # If the current line is not a category, it must be content
                 try:
@@ -173,11 +174,11 @@ class TextDictConverter:
                     file_content[key] = line
         return file_content
 
-    def json_filename_to_text(self, filename: str) -> str:
-        """Convert contents of json file 'filename' to a string with our text format.
+    def json_filename_to_text(self, filepath: Path) -> str:
+        """Convert contents of json file 'filepath' to a string with our text format.
 
         """
-        with open(filename, mode='r') as f:
+        with filepath.open(mode='r') as f:
             return self.json_file_to_text(f)
 
     def json_file_to_text(self, f: FileOrString) -> str:

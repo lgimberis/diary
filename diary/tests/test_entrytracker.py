@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 
 from diary.entrytracker import EntryTracker
 from diary.text_dict_converter import TextDictConverter
@@ -52,8 +53,8 @@ class EntryTrackerTester(unittest.TestCase):
         first_file_content = self.example_file_two
         second_file_content = self.example_file_three
         tdc = TextDictConverter("[", "]", "(", ")")
-        et.add_file("first_file_name.txt", tdc.text_file_to_dict(first_file_content))
-        et.add_file("second_file_name.txt", tdc.text_file_to_dict(second_file_content))
+        et.add_file(Path("first_file_name.txt"), tdc.text_file_to_dict(first_file_content))
+        et.add_file(Path("second_file_name.txt"), tdc.text_file_to_dict(second_file_content))
         return et
 
     def testAddFirstFile(self):
@@ -63,7 +64,7 @@ class EntryTrackerTester(unittest.TestCase):
         et = EntryTracker()
         tdc = TextDictConverter("[", "]", "(", ")")
         file_content = self.example_file_one
-        et.add_file("testfile.txt", tdc.text_file_to_dict(file_content))
+        et.add_file(Path("testfile.txt"), tdc.text_file_to_dict(file_content))
 
         # Ensure that we're tracking Key 1:None, Key 2:None, and Key 2:Category
         with self.subTest(msg="EntryTracker:__contains__"):
@@ -132,7 +133,7 @@ class EntryTrackerTester(unittest.TestCase):
         amended_first_file_dict["Key 6"+ics+"Category 5"+ics] = "Extra test for existing key"
 
         # Re-add and ensure all the changes are reflected correctly
-        et.add_file("first_file_name.txt", amended_first_file_dict)
+        et.add_file(Path("first_file_name.txt"), amended_first_file_dict)
 
         with self.subTest(msg="Modify existing key and category"):
             self.assertEqual(et["Key 1"][NONE_CATEGORY_NAME].get_files(),

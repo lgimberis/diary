@@ -1,3 +1,4 @@
+from pathlib import Path
 
 class _EntryTrackerNest:
     """Abstraction that hides our flat structure, pretending it is nested.
@@ -109,7 +110,7 @@ class EntryTracker(_EntryTrackerNest):
         # Hide base class extra parameters
         super().__init__(separator)
 
-    def add_file(self, filename: str, metadata: dict, remove_extension=True) -> None:
+    def add_file(self, filepath: Path, metadata: dict, remove_extension=True) -> None:
         """Track the given 'metadata' dict assuming it corresponds to 'filename'.
 
         If 'remove_extension' is True, will first attempt to cut the extension
@@ -118,9 +119,9 @@ class EntryTracker(_EntryTrackerNest):
         """
 
         if remove_extension:
-            basename = ".".join(filename.split(".")[:-1])
+            basename = str(filepath.with_suffix(""))
         else:
-            basename = filename
+            basename = str(filepath)
 
         # If this file is already in the database, remove its contents first
         self.remove_file(basename)

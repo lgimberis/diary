@@ -1,5 +1,5 @@
 from collections import OrderedDict
-import os
+from pathlib import Path
 import sys
 
 from .diary import Diary
@@ -38,9 +38,9 @@ def main():
             print(f"{command_to_explain} ({alias_list}) - {COMMANDS[command_to_explain].help}")
 
     if len(sys.argv) > 1:
-        root = os.path.abspath(sys.argv[1])
+        root = Path(sys.argv[1:]).absolute()
     else:
-        root = os.getcwd()
+        root = Path().absolute()
     with Diary(root) as d:
         main_command = None
         while main_command not in COMMANDS[EXIT_NAME].aliases:
