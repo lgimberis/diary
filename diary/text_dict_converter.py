@@ -84,8 +84,7 @@ class TextDictConverter:
             if check:
                 for level in range(1, max_level+1):
                     regex = self.__get_regex(level)
-                    match = re.match(regex, line)
-                    if match:
+                    if match := re.match(regex, line):
                         return level, match.group(1)
             return 0, None
 
@@ -98,8 +97,7 @@ class TextDictConverter:
                 """Determine whether iterated is a simple extended example of initial."""
                 if initial in iterated:
                     regex = r"^(.*)" + re.escape(initial) + r"(.*)$"
-                    match = re.match(regex, iterated)
-                    if match:
+                    if match := re.match(regex, iterated):
                         prefix = match.group(1)
                         suffix = match.group(2)
                         return True, prefix, suffix
@@ -206,13 +204,13 @@ class TextDictConverter:
             current_categories = key.split(self.internal_category_separator)
 
             # Compare to find our relative depth
-            for (index, current_category), parser_category in zip(
-                    enumerate(current_categories), text_categories):
-                if current_category != parser_category:
-                    break
-            else:
-                # Falls through here if all categories match
-                index = len(text_categories)
+            def get_first_difference(list_a, list_b):
+                for (i, a), b in zip(enumerate(list_a), list_b):
+                    if a != b:
+                        return i
+                return min(len(list_a), len(list_b))
+
+            index = get_first_difference(current_categories, text_categories)
 
             # Travel 'up' the tree to where we are now
             text_categories = text_categories[:index]
