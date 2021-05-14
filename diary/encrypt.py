@@ -11,7 +11,7 @@ class Encryptor:
     SALT_SIZE_BYTES = 16
     DEFAULT_ITERATIONS = 100000
 
-    def __init__(self, password, salt=None, iterations=DEFAULT_ITERATIONS,
+    def __init__(self, password: bytes, salt=b"", iterations=DEFAULT_ITERATIONS,
                  salt_size_bytes=SALT_SIZE_BYTES):
         self.password = password
         self.iterations = iterations
@@ -19,20 +19,12 @@ class Encryptor:
         if salt:
             self.salt = salt
         else:
-            self.salt = Encryptor.__random_salt(salt_size_bytes)
+            self.salt = Encryptor.random_salt()
 
-        try:
-            self.fernet = self.__get_fernet()
-        except TypeError:
-            if type(self.salt) is not bytes:
-                raise TypeError(f"Type of salt is {type(self.salt)}, "
-                                f"should be {bytes}")
-            elif type(self.password) is not bytes:
-                raise TypeError(f"Type of password is {type(self.password)}, "
-                                f"should be {bytes}")
+        self.fernet = self.__get_fernet()
 
     @staticmethod
-    def __random_salt(size: int) -> bytes:
+    def random_salt(size=SALT_SIZE_BYTES) -> bytes:
         """Get a salt with size bytes.
 
         """
@@ -54,19 +46,11 @@ class Encryptor:
         """Return an encrypted version of the argument.
 
         """
-        try:
-            return self.fernet.encrypt(item)
-        except TypeError:
-            raise TypeError(f"Argument to Encryptor.encrypt must be of type "
-                            f"{bytes}, is instead {type(item)}")
+        return self.fernet.encrypt(item)
 
     def decrypt(self, item: bytes) -> bytes:
         """Return a decrypted version of the argument.
 
         May throw InvalidToken if it wasn't encrypted with the exact same settings.
         """
-        try:
-            return self.fernet.decrypt(item)
-        except TypeError:
-            raise TypeError(f"Argument to Encryptor.decrypt must be of type "
-                            f"{bytes}, is instead {type(item)}")
+        return self.fernet.decrypt(item)
