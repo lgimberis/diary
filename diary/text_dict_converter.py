@@ -4,7 +4,9 @@ import typing
 from collections import OrderedDict
 from pathlib import Path
 
-FileOrString = typing.TypeVar("FileOrString", typing.TextIO, str)
+from diary.config import Config
+
+FileOrStringOrDict = typing.TypeVar("FileOrStringOrDict", typing.TextIO, str, OrderedDict)
 # Maximum number of category levels someone should ever need.
 MAXIMUM_SENSIBLE_CATEGORY_LEVEL = 20
 DEFAULT_KEY = ""
@@ -18,11 +20,11 @@ class TextDictConverter:
         Exposes get_level() and check_line().
         """
 
-        def __init__(self, category_prefix, category_suffix, subcategory_prefix, subcategory_suffix):
-            self.category_prefix = category_prefix
-            self.category_suffix = category_suffix
-            self.subcategory_prefix = subcategory_prefix
-            self.subcategory_suffix = subcategory_suffix
+        def __init__(self, config: Config):
+            self.category_prefix = config[Config.CONFIG_CATEGORY_PREFIX]
+            self.category_suffix = config[Config.CONFIG_CATEGORY_SUFFIX]
+            self.subcategory_prefix = config[Config.CONFIG_SUBCATEGORY_PREFIX]
+            self.subcategory_suffix = config[Config.CONFIG_SUBCATEGORY_SUFFIX]
             self.__set_up_infinite_levels()
 
         def __get_regex(self, n: int, with_ends=True) -> str:
@@ -119,14 +121,8 @@ class TextDictConverter:
                 self.suffix_extension_prefix = s_prefix
                 self.suffix_extension_suffix = s_suffix
 
-    def __init__(self,
-                 category_prefix="[", category_suffix="]",
-                 subcategory_prefix="[[", subcategory_suffix="]]",
-                 separator=";"):
-        self.formatter = self.__TextFormatAnalyser(
-            category_prefix, category_suffix,
-            subcategory_prefix, subcategory_suffix)
-        self.internal_category_separator = separator
+    def __init__(self, config: Config):
+        self.config = config
 
     def text_filename_to_dict(self, filepath: Path) -> OrderedDict:
         """Return the content of the file named 'filepath' as OrderedDict.
@@ -135,7 +131,7 @@ class TextDictConverter:
         with filepath.open(mode='r') as f:
             return self.text_file_to_dict(f)
 
-    def text_file_to_dict(self, f: FileOrString) -> OrderedDict:
+    def text_file_to_dict(self, f: FileOrStringOrDict) -> OrderedDict:
         """Return the content of text file 'f' as OrderedDict.
 
         """
@@ -159,13 +155,14 @@ class TextDictConverter:
         file_content = OrderedDict()
         text_categories = []
         key = DEFAULT_KEY
+        ics = self.config[Config.CONFIG_ICS]
+        formatter = self.__TextFormatAnalyser(self.config)
         for line in file_content_list:
-            category_level, category_name = self.formatter.check_line(line)
+            category_level, category_name = formatter.check_line(line)
             if category_level:
                 text_categories = text_categories[:category_level - 1]
                 text_categories.append(category_name)
-                key = self.internal_category_separator.join(text_categories) \
-                      + self.internal_category_separator
+                key = ics.join(text_categories) + ics
             else:
                 # If the current line is not a category, it must be content
                 try:
@@ -181,12 +178,14 @@ class TextDictConverter:
         with filepath.open(mode='r') as f:
             return self.json_file_to_text(f)
 
-    def json_file_to_text(self, f: FileOrString) -> str:
+    def json_file_to_text(self, f: FileOrStringOrDict) -> str:
         """Convert a JSON file or string containing a dict to a string with our text format.
 
         """
-        if type(f) == str:
+        if isinstance(f, str):
             dictionary = json.loads(f, object_pairs_hook=OrderedDict)
+        elif isinstance(f, OrderedDict):
+            dictionary = f
         else:
             # Assume file
             dictionary = json.load(f, object_pairs_hook=OrderedDict)
@@ -197,12 +196,14 @@ class TextDictConverter:
 
         Whitespace may not be preserved.
         """
+        formatter = self.__TextFormatAnalyser(self.config)
+        ics = self.config[Config.CONFIG_ICS]
 
         # We track the text file's location on the "tree" via text_categories
         text_categories = []
 
         for key, this_key in dictionary.items():
-            current_categories = key.split(self.internal_category_separator)
+            current_categories = key.split(ics)
 
             # Compare to find our relative depth
             def get_first_difference(list_a, list_b):
@@ -221,7 +222,7 @@ class TextDictConverter:
                     current_categories[index:],
                     start=index):
                 if category:
-                    prefix, suffix = self.formatter.get_level(print_index + 1)
+                    prefix, suffix = formatter.get_level(print_index + 1)
                     yield prefix + category + suffix
                     text_categories.append(category)
 
