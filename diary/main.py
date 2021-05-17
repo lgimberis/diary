@@ -22,6 +22,7 @@ COMMANDS = OrderedDict([
     ("Today", Command(["today", "t"], "Open today's entry", "today", 0)),
     ("Date", Command(["date", "d"], "Open an entry corresponding to the given date", "get_entry", 1)),
     ("Open", Command(["open", "o"], "Open a file of the given name", "get_file", 1)),
+    ("Config", Command(["config", "c"], "Open the config file for editing", "edit_config", 0))
 ])
 
 
