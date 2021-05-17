@@ -1,5 +1,6 @@
 from pathlib import Path
 
+
 class _EntryTrackerNest:
     """Abstraction that hides our flat structure, pretending it is nested.
     """
