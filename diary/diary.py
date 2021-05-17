@@ -1,15 +1,21 @@
 import datetime
+import logging
 import json
-import os
 from pathlib import Path
 import platform
-import re
 import subprocess
 from getpass import getpass
+from collections import OrderedDict
+import typing
+
+from cryptography.exceptions import InvalidSignature
 
 from diary.encrypt import Encryptor
 # from diary.entrytracker import EntryTracker
 from diary.text_dict_converter import TextDictConverter
+from diary.config import Config
+
+StringOrDict = typing.TypeVar("StringOrDict", OrderedDict, str)
 
 
 class Diary:
@@ -21,178 +27,169 @@ class Diary:
     get_file - Get any file with the given prefix (discard extension)
     """
 
-    ACCEPTED_EDITORS = [
-
-    ]
-
-    ROOT_FILE_NAME = "diary.dat"
     CONFIG_FILE_NAME = "config.cfg"
+    LOG_EXTENSION = ".log"
+    ENCRYPTED_EXTENSION = ".dat"
+    ROOT_FILE_NAME = "diary"
+    TEXT_EXTENSION = ".txt"
+    PARSED_EXTENSION = ".json"
+    ENCODING = 'utf-8'
 
-    class ConfigFile:
-        """Complete management of the config file.
+    def __init__(self,
+                 root: str,  # Representation of directory in which root is created
+                 editor="",
+                 logging_level=logging.INFO,
+                 may_create_database=True,  # Whether creating a database is allowed
+                 may_overwrite=True,  # Whether overwriting existing files is allowed
+                 keep_logs=False,  # Whether to keep logs after closing even if nothing seems wrong
+                 ):
+        """Initialise structures in preparation of creating or opening a diary database under 'root'.
 
-        ConfigFile behaves like an extended dictionary, directly supporting
-        get and set via square bracket operators.
+        Does not interact with any files on disk.
+        Prepares root directory, root file, config file, log directory and file.
+        Sets up a default self.config, and overwrites editor with our arg.
         """
-        CONFIG_CATEGORY_PREFIX = "Category_Prefix"
-        CONFIG_CATEGORY_SUFFIX = "Category_Suffix"
-        CONFIG_SUBCATEGORY_PREFIX = "Subcategory_Prefix"
-        CONFIG_SUBCATEGORY_SUFFIX = "Subcategory_Suffix"
-        CONFIG_USE_ENCRYPTION = "Use_Encryption"
-        CONFIG_ICS = "Internal_Category_Separator"
+        self.logging_level = logging_level
+        self.may_create_database = may_create_database
+        self.may_overwrite = may_overwrite
+        self.keep_logs = keep_logs
 
-        def defaults(self):
-            """Return the default config values.
-            """
-            return {
-                self.CONFIG_CATEGORY_PREFIX: "[",
-                self.CONFIG_CATEGORY_SUFFIX: "]",
-                self.CONFIG_SUBCATEGORY_PREFIX: "[[",
-                self.CONFIG_SUBCATEGORY_SUFFIX: "]]",
-                self.CONFIG_USE_ENCRYPTION: "True",
-                self.CONFIG_ICS: ";"
-            }
-
-        def __init__(self, path: Path, may_create=True):
-            """Set config to default.
-
-            """
-            self.config = self.defaults()
-            self.path = path
-            self.exists = path.is_file()
-            if may_create and not self.exists:
-                self.create_config_file()
-
-        def __getitem__(self, key):
-            return self.config[key]
-
-        def __setitem__(self, key, value):
-            self.config[key] = value
-
-        def get_file(self):
-            return self.path
-
-        def reload(self) -> bool:
-            """Update self.config with the new/current content of the config file.
-
-            Returns whether any config values changed.
-            This should be called whenever the file on disk could have been updated.
-            """
-            new_config = self.defaults()
-            try:
-                lines = self.path.read_text(encoding='utf-8').split("\n")
-                for line in lines:
-                    if line.strip() and (match := re.match(r"^\s*(.*)=(.*)\s*(#,^)", line)):
-                        new_config[match.group(1)] = match.group(2)
-            except IOError:
-                raise IOError(f"Config file {str(self.path)} does not exist ")
-            config_changed = self.config != new_config
-            self.config = new_config
-            return config_changed
-
-        def create_config_file(self, may_overwrite=True):
-            """Create a config file based on self.config.
-
-            If the config file already exists, this function will either overwrite
-            it, or raise an exception if not may_overwrite.
-
-            This should be called whenever self.config has been modified.
-            """
-            temp_config_file = self.path.with_suffix(self.path.suffix+"_tmp")
-            with temp_config_file.open(mode='w') as f:
-                def write_value(temp_f, value):
-                    """Helper function to write value=self.config[value]\n"""
-                    temp_f.write(f"{value}={repr(self.config[value])}\n")
-                write_value(f, self.CONFIG_CATEGORY_PREFIX)
-                write_value(f, self.CONFIG_CATEGORY_SUFFIX)
-                write_value(f, self.CONFIG_SUBCATEGORY_PREFIX)
-                write_value(f, self.CONFIG_SUBCATEGORY_SUFFIX)
-
-                f.write(
-                    "\n"
-                    "# Whether to use password protection and encrypt all data files. \n"
-                    "# Note this will also necessarily encrypt this config.\n"
-                    "# Values: True, False"
-                )
-                write_value(f, self.CONFIG_USE_ENCRYPTION)
-
-                f.write(
-                    "\n"
-                    "# If using a flat category structure, ensure this is not set \n"
-                    "# to any character used in category names. \n"
-                    "# Values: Any single non-alphabetical non-numerical character \n"
-                )
-                write_value(f, self.CONFIG_ICS)
-            if may_overwrite:
-                temp_config_file.replace(self.path)
-            else:
-                temp_config_file.rename(self.path)
-
-    def __init__(self, root: str, editor=None, verbose=False, may_create=True,
-                 may_overwrite=True, use_encryption=True):
-        """Given a root directory, prepare to set up a diary database.
-
-        If no such file exists, create a new root directory in the given root.
-        """
-        self.verbose = verbose
-
-        # Either create the root directory, or exit.
         self.root = Path(root)
+
+        # Prepare log file directory and path
+        self.log_directory = Path(self.root, "logs")
+
+        def log_filename():
+            time_now = datetime.datetime.now()
+            formatted_time_now = time_now.isoformat(sep='_', timespec='seconds')
+            filename_now = formatted_time_now.replace('-', '').replace(':', '')
+            return filename_now
+        self.log_file = Path(self.log_directory, log_filename()+self.LOG_EXTENSION)
+
+        # Initialise config
+        self.config = Config(Path(self.root, self.CONFIG_FILE_NAME))
+        if editor:
+            self.config[self.config.CONFIG_EDITOR] = editor
+
+        # Prepare root file
+        self.root_file = Path(self.root, self.ROOT_FILE_NAME)
+
+        # Appease linter by defining these variables here - overwritten before use.
+        self.tdc = TextDictConverter(self.config)
+        self.encryptor = None  # The actual encryption/decryption class
+
+    def __enter__(self):
+        """Create or open a diary database under self.root.
+
+        Creates a root directory, log directory, log file, and config file in
+        that order. Log files will probably always be created because filename
+        depends on the time at which this Diary object was created.
+        """
+        # Create the root directory, or exit.
         if not self.root.is_dir():
-            if not may_create:
+            if not self.may_create_database:
                 raise OSError(f"Root directory {self.root} does not exist")
             else:
                 self.root.mkdir(parents=True)
 
-        self.root_file = Path(self.root, self.ROOT_FILE_NAME)
-        self.config = self.ConfigFile(
-            Path(self.root, self.CONFIG_FILE_NAME), may_create
+        # Create the log directory
+        if not self.log_directory.is_dir():
+            # Create regardless of settings
+            self.log_directory.mkdir()
+
+        # Set up the logger
+        # Suppress erroneous problem reported due to incomplete logging.basicConfig spec
+        # noinspection PyArgumentList
+        logging.basicConfig(
+            filename=str(self.log_file),
+            format='[%(asctime)s] %(levelname)s:%(message)s',
+            datefmt='%Y/%m/%d %H:%M:%S.uuu',
+            encoding='utf-8',
+            level=self.logging_level
         )
-        self.tdc = self.reload_config(force=True)
+        logging.info("Logging initialised")
+        logging.info("Note that only the 5 most recent logs are retained, "
+                     "unless keep_logs is set to True.")
+        #TODO check existing number of log files and delete oldest one
 
-        if not self.root_file.is_file():
-            if not may_create:
-                raise OSError(f"Root file {self.root_file} does not exist")
-            # If we're creating a root file, we normally expect an empty directory.
-            # If there are already files, we need to make sure we don't delete any
-            # important data without the User's knowledge.
-            # Get all files in the root directory as strings.
-            # TODO actually use self.files_to_add
-            self.files_to_add = [path for path in self.root.iterdir()]
-            if len(self.files_to_add) > 0:
-                if not may_overwrite:
-                    raise OSError(f"Detected {len(self.files_to_add)} files in root"
-                                  f" directory {self.root}. Enable overwrite if desired.")
-                print(f"Detected {len(self.files_to_add)} files in root. "
-                      f"These will be passed directly into the diary.")
+        # Create the config file if it doesn't exist.
+        if not self.config.file_exists():
+            logging.info("Creating config file")
+            self.config.create_config_file()
 
-        self.editor = editor
-        if self.editor and self.editor not in self.ACCEPTED_EDITORS:
-            raise ValueError(f"Editor {self.editor} is not implemented")
+            logging.info("Prompting user to edit their config file ...")
+            if input("Set up config file? (y/n)").lower() != 'n':
+                logging.info("User begins editing config file...")
+                self.edit_config()
+                logging.info("... User finishes editing config file")
+            else:
+                logging.info("... User chose not to edit config file")
 
-    def reload_config(self, force=False):
-        """If the config file was updated, reload it into self.config and update our structures accordingly.
+            # Reminder about how to change the config file
+            print(f"Config file can be modified at any time on disk "
+                  f"(at {str(self.config.path)})"
+                  f"or via the 'c' or 'config' commands.")
 
-        This should be called any time the config file COULD have edited since
-        we had loaded it last. This means before any call that could have had
-        a significant delay, such as any command the user inputs.
-        """
-        if self.config.reload() or force:
-            tdc = TextDictConverter(
-                self.config[self.config.CONFIG_CATEGORY_PREFIX],
-                self.config[self.config.CONFIG_CATEGORY_SUFFIX],
-                self.config[self.config.CONFIG_SUBCATEGORY_PREFIX],
-                self.config[self.config.CONFIG_SUBCATEGORY_SUFFIX],
-                self.config[self.config.CONFIG_ICS]
-            )
-            return tdc
+        # Create or read the root file, or exit.
+        logging.info(f"Root file exists: {str(self.root_file.is_file())}")
+        if self.root_file.is_file() or self.may_create_database:
+            self.__open_root_file()
         else:
-            return self.tdc
+            raise OSError(f"Root file {self.root_file} does not exist")
 
-    def __enter__(self):
-        self.tdc = self.reload_config()
-        #self.et = EntryTracker()
-        self.__open_diary_database()
+        # We need to make sure all files under the root directory are in our database.
+        expected_files = [self.config.path, self.root_file]
+        #TODO extend expected_files according to EntryTracker's files
+        unexpected_files = [
+            path for path in self.root.iterdir() if path not in expected_files
+        ]
+
+        # If there are files under the root directory not in our database, we must (try to) add them.
+        if len(unexpected_files) > 0:
+            print(f"Detected {len(unexpected_files)} unexpected files.")
+
+            if self.may_overwrite:
+                print(f"Since overwriting is disabled, these files will not be modified or included.")
+            else:
+                print(f"Will now attempt to resolve these.")
+                encrypt = self.config[Config.CONFIG_USE_ENCRYPTION]
+
+                if not self.encryptor and any(
+                        [path.suffix == self.ENCRYPTED_EXTENSION for path in unexpected_files]
+                ):
+                    logging.info(f"Encryptor is being set up due to presence of encrypted-looking files.")
+                    self.encryptor = self.__create_encryptor(False, self.salt)
+
+                resolved_files = 0
+                for path in unexpected_files:
+                    try:
+                        if content := self.__load_file(path):
+                            if isinstance(content, str):
+                                parsed_content = self.tdc.text_file_to_dict(content)
+                            else:
+                                parsed_content = content
+
+                            if encrypt:
+                                destination = path.with_suffix(self.ENCRYPTED_EXTENSION)
+                            else:
+                                destination = path.with_suffix(self.PARSED_EXTENSION)
+
+                            self.et.add_file(destination, parsed_content)
+                            self.__write_file(parsed_content, destination)
+                            if path != destination:
+                                path.unlink()
+                            resolved_files += 1
+                        else:
+                            logging.debug(f"File cannot be loaded, either empty or incompatible: {str(path)}")
+                    except InvalidSignature:
+                        logging.debug(f"Failed to decrypt encrypted file:  {str(path)}")
+                if resolved_files == len(unexpected_files):
+                    logging.info(f"Successfully resolved all unexpected files.")
+                else:
+                    logging.info(f"Resolved {resolved_files}/{len(unexpected_files)} files.")
+
+        # self.et = EntryTracker()
+
         return self
 
     def __exit__(self, t, v, tb):
@@ -208,6 +205,7 @@ class Diary:
             f.write(self.encryptor.get_salt() + b'\n')
             # f.write(self.encryptor.encrypt(bytes(self.et)))
         self.root_file = tmp_root_file.replace(self.root_file)
+        # TODO delete log file unless self.keep_logs
 
     @staticmethod
     def __get_password(confirm=False):
@@ -217,7 +215,7 @@ class Diary:
         if confirm:
             passwords_match = False
             while not passwords_match:
-                #TODO should we exit when passwords are wrong instead?
+                # TODO should we exit when passwords are wrong instead?
                 repeat_password = getpass("Repeat password: ")
                 passwords_match = (password == repeat_password)
                 if not passwords_match:
@@ -225,15 +223,30 @@ class Diary:
                     password = getpass("Password: ")
         return password
 
-    def __open_diary_database(self):
-        """Open or initialise a new diary database in the root location.
+    def __create_encryptor(self, confirm: bool, salt: bytes, encrypted_password=b""):
+        """Create an Encryptor.
 
-        The meaning of 'opening' is currently to:
-         - set up self.encryptor, for reading/writing new entries
+        """
+        password = self.__get_password(confirm=confirm)
+        password_utf8 = password.encode('utf-8')
+        encryptor = Encryptor(password_utf8, salt)
+
+        if encrypted_password:
+            try:
+                assert password_utf8 == encryptor.decrypt(encrypted_password)
+            except (AssertionError, InvalidSignature) as e:
+                raise InvalidSignature("Password does not match.")
+
+        return encryptor
+
+    def __open_root_file(self):
+        """Read or create a root file.
+
+        1) Create a root file if it isn't present
+        2) Read/write an encrypted salt and password
+        3) Read/write EntryTracker contents
         """
         create = not self.root_file.is_file()
-        self.password = self.__get_password(confirm=create)
-        self.password_UTF8 = self.password.encode('utf-8')
 
         if create:
             mode = 'w+b'
@@ -242,67 +255,84 @@ class Diary:
 
         with self.root_file.open(mode=mode) as f:
             if create:
-                salt = None
+                self.salt = Encryptor.random_salt()
+                encrypted_password = b""
             else:
-                salt = next(f)[:-1]
-            self.encryptor = Encryptor(self.password_UTF8, salt)
+                self.salt = next(f)[:-1]  # [:-1] -> Ignore trailing newlines
+                encrypted_password = next(f)[:-1]
+
+            if self.config[Config.CONFIG_USE_ENCRYPTION]:
+                self.encryptor = self.__create_encryptor(
+                    create,
+                    self.salt,
+                    encrypted_password=encrypted_password
+                )
 
             if create:
-                f.write(self.encryptor.get_salt() + b'\n')
-                # self.et = EntryTracker()
-            else:
-                # self.et = EntryTracker(self.encryptor.decrypt(next(f)))
-                pass
-
-    def edit_config_file(self):
-        """Open the config file in a text editor and reload the config afterwards.
-
-        """
-        self.__edit_txt_file(self.config.get_file())
-        self.tdc = self.reload_config()
+                f.write(self.salt + b'\n')
+                if self.config[Config.CONFIG_USE_ENCRYPTION]:
+                    message = self.encryptor.encrypt(self.encryptor.password) + b'\n'
+                else:
+                    message = b'\n'
+                # noinspection PyTypeChecker
+                f.write(message)
+        # self.et = EntryTracker()
+        # self.et = EntryTracker(self.encryptor.decrypt(next(f)))
 
     def __edit_txt_file(self, filepath: Path):
         """Open filename with the provided editor.
         """
-        if self.editor:
-            pass
+        editor = self.config[self.config.CONFIG_EDITOR]
+        if editor:
+            subprocess.run([editor, str(filepath)], check=True, shell=True)
         else:
-            if platform.system() == 'Windows':
-                subprocess.run(['start', "/WAIT", str(filepath)], check=True, shell=True)
+            if platform.system() == "Windows":
+                start_keyword = 'start'
+            elif platform.system() == "Darwin":
+                start_keyword = 'start'
             else:
-                # TODO
-                raise OSError("Does not support non-Windows systems yet")
+                # TODO test
+                start_keyword = 'xdg-open'
+            subprocess.run([start_keyword, str(filepath)], check=True, shell=True)
+
+    def edit_config(self):
+        self.__edit_txt_file(self.config.path)
 
     def get_file(self, prefix: str, subdirectory=None, delete=True):
         """Extract and open a .txt file corresponding to the given filename prefix.
         """
-        self.tdc = self.reload_config()
+        encrypt = self.config[Config.CONFIG_USE_ENCRYPTION]
         if subdirectory:
             basename = Path(self.root, subdirectory, prefix)
         else:
             basename = Path(self.root, prefix)
-        txt_filename = basename.with_suffix(".txt")
-        packed_filename = basename.with_suffix(".dat")
+
+        txt_filename = basename.with_suffix(self.TEXT_EXTENSION)
+
+        if encrypt:
+            data_suffix = self.ENCRYPTED_EXTENSION
+        else:
+            data_suffix = self.PARSED_EXTENSION
+        data_filename = basename.with_suffix(data_suffix)
 
         # Look for an existing txt_filename
         if not txt_filename.is_file():
-            if packed_filename.is_file():
-                # Create a text file form the packed file
-                with packed_filename.open(mode='rb') as f:
-                    self.__unpack(f, txt_filename)
+            if data_filename.is_file():
+                # Create a text file from the packed file
+                self.__write_file(self.__load_file(data_filename), txt_filename)
             else:
                 # Create an empty text file
                 txt_filename.touch()
 
-        # Open our .txt file with our chosen editor
+        # Open our text file with our chosen editor
         self.__edit_txt_file(txt_filename)
 
         # Once finished, catalogue our changes
-        file_dict = self.tdc.text_filename_to_dict(str(txt_filename))
+        file_dict = self.tdc.text_filename_to_dict(txt_filename)
         # self.et.add_file(file_dict, txt_filename)
-        self.__pack(file_dict, packed_filename)
+        self.__write_file(file_dict, data_filename)
         if delete:
-            # Remove our .txt file
+            # Remove our text file
             txt_filename.unlink()
 
     def get_entry(self, date):
@@ -319,20 +349,55 @@ class Diary:
         date_today = datetime.date.today()
         self.get_entry(date_today)
 
-    def __pack(self, file_dict, destination: Path):
-        """Write argument into destination as encrypted bytes.
-        
-        """
-        content = json.dumps(file_dict)
-        with destination.open(mode='wb') as packed_f:
-            packed_f.write(self.encryptor.encrypt(content.encode('utf-8')))
+    def __load_file(self, source: Path) -> StringOrDict:
+        """Loads the data in the file at Path 'source'.
 
-    def __unpack(self, f, destination: Path):
-        """Decrypt file f, convert it to text from JSON, and store it into the destination file.
+        The return value will be either a read text file (str) or a parsed
+        data file (OrderedDict). The return value type can be anticipated
+        from the file suffix and/or inferred.
         """
-        content = bytes()
-        for line in f:
-            content += line
-        with destination.open(mode='w') as unpacked_f:
-            decrypted_content = self.encryptor.decrypt(content).decode('utf-8')
-            unpacked_f.write(self.tdc.json_file_to_text(decrypted_content))
+        if source.suffix == self.TEXT_EXTENSION:
+            return source.read_text(encoding='utf-8')
+        elif source.suffix == self.PARSED_EXTENSION:
+            with source.open(mode='r') as f:
+                # noinspection PyTypeChecker
+                return json.load(f, object_pairs_hook=OrderedDict)
+        elif source.suffix == self.ENCRYPTED_EXTENSION:
+            encrypted_data = source.read_bytes()
+            if not self.encryptor:
+                raise Exception("No encryptor set, but trying to load encrypted data")
+            data = self.encryptor.decrypt(encrypted_data).decode('utf-8')
+            # noinspection PyTypeChecker
+            return json.loads(data, object_pairs_hook=OrderedDict)
+        else:
+            # Unknown extension
+            return ""
+
+    def __write_file(self, data: StringOrDict, destination: Path) -> None:
+        """Writes 'data' to the file at Path 'destination'.
+
+        Data should either be a read text file (str) or a parsed data file
+        (OrderedDict).
+        Destination file format is inferred from extension.
+        """
+        if destination.suffix == self.TEXT_EXTENSION:
+            if isinstance(data, OrderedDict):
+                deserialised_data = self.tdc.json_file_to_text(data)
+            else:
+                deserialised_data = data
+            destination.write_text(deserialised_data, encoding='utf-8')
+        else:
+            if isinstance(data, str):
+                serialised_data = self.tdc.text_file_to_dict(data)
+            else:
+                serialised_data = data
+
+            if destination.suffix == self.PARSED_EXTENSION:
+                with destination.open(mode='w') as f:
+                    json.dump(serialised_data, f)
+            elif destination.suffix == self.ENCRYPTED_EXTENSION:
+                # Encrypt parsed data
+                encrypted_data = self.encryptor.encrypt(json.dumps(serialised_data).encode('utf-8'))
+                destination.write_bytes(encrypted_data)
+            else:
+                raise ValueError(f"destination suffix {destination.suffix} does not match allowed values")
