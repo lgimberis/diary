@@ -11,8 +11,7 @@ class Encryptor:
     SALT_SIZE_BYTES = 16
     DEFAULT_ITERATIONS = 100000
 
-    def __init__(self, password: bytes, salt=b"", iterations=DEFAULT_ITERATIONS,
-                 salt_size_bytes=SALT_SIZE_BYTES):
+    def __init__(self, password: bytes, salt=b"", iterations=DEFAULT_ITERATIONS):
         self.password = password
         self.iterations = iterations
 
