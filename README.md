@@ -6,7 +6,13 @@ I DO NOT RECOMMEND ANYONE USE THIS IN ITS CURRENT STATE UNLESS THEY'RE REALLY SU
 YOU HAVE BEEN WARNED.
 
 ## Summary
-Diary is a program that keeps an encrypted, password-protected database of text files.
+Diary is a program that manages a directory of text files with an emphasis on Diary-style entries for each day.
+
+Diary provides:
+ - Optional password encryption of text files
+ - A 'category' system to categorise text beyond daily entries for easy reference
+ - A lookup system to search and collate content of all its files
+
 It provides a CLI for interacting with its contents. Individual files can be edited with any text editor.
 Whenever files are not actively being edited, they will be encrypted.
 
