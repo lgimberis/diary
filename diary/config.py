@@ -20,9 +20,9 @@ class Config:
     CONFIG_SUBCATEGORY_SUFFIX = "Subcategory_Suffix"
     CONFIG_USE_ENCRYPTION = "Use_Encryption"
     CONFIG_ICS = "Internal_Category_Separator"
-    CONFIG_EDITOR = "Editor_Location"
+    CONFIG_EDITOR = "Editor_Executable"
 
-    def defaults(self):
+    def __defaults(self):
         """Return the default config values.
         """
         return {
@@ -37,58 +37,53 @@ class Config:
 
     def __init__(self, path: Path):
         """Set up default config in memory. Reload config from file if it exists.
-
         """
-        self.config = self.defaults()
+        self.config = self.__defaults()
         self.path = path
         self.last_reload_time = 0.0
         if self.file_exists():
             # Load values from file
-            self.reload()
+            self.__reload()
 
     def file_exists(self) -> bool:
         """Whether the config file exists on disk."""
         return self.path.is_file()
 
-    def last_modification_time(self) -> float:
+    def __last_modification_time(self) -> float:
         """Representation of the last time the file on disk was modified."""
         return self.path.stat().st_mtime
 
-    def update_modification_time(self) -> None:
+    def __update_modification_time(self) -> None:
         """Update our reference for the last time disk and memory configs were synced."""
-        self.last_reload_time = self.last_modification_time()
+        self.last_reload_time = self.__last_modification_time()
 
-    def may_have_changed(self) -> bool:
+    def __may_have_changed(self) -> bool:
         """Whether the config file may have changed since our last access."""
         if not self.file_exists():
             return False  # Since the file doesn't exist, it can't have changed.
-        return self.last_modification_time() == self.last_reload_time
-
-    def get_full_config_without_reload(self):
-        """Allow direct manipulation of self.config."""
-        return self.config
+        return self.__last_modification_time() == self.last_reload_time
 
     def __getitem__(self, key):
         """Config[key] -> (should_reload, Config.config[key])"""
-        if self.may_have_changed():
-            self.reload()
+        if self.__may_have_changed():
+            self.__reload()
         return self.config[key]
 
     def __setitem__(self, key, value):
         """Updates the config and file."""
         # Ensure we don't inadvertently delete any user changes to the file
-        if self.may_have_changed():
-            self.reload()
+        if self.__may_have_changed():
+            self.__reload()
         self.config[key] = value
         self.create_config_file()
 
-    def reload(self) -> bool:
+    def __reload(self) -> bool:
         """Update self.config with the content of the file on disk.
 
         Returns whether any config values changed.
         This should be called whenever the file on disk could have been updated.
         """
-        new_config = self.defaults()
+        new_config = self.__defaults()
         try:
             lines = self.path.read_text(encoding='utf-8').split("\n")
             for line in lines:
@@ -107,7 +102,7 @@ class Config:
             raise IOError(f"Config file {str(self.path)} does not exist ")
         config_changed = self.config != new_config
         self.config = new_config
-        self.update_modification_time()
+        self.__update_modification_time()
         return config_changed
 
     def create_config_file(self, may_overwrite=True):
@@ -156,4 +151,4 @@ class Config:
             temp_config_file.replace(self.path)
         else:
             temp_config_file.rename(self.path)
-        self.update_modification_time()
+        self.__update_modification_time()
