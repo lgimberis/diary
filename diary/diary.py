@@ -110,7 +110,7 @@ class Diary:
         logging.info("Logging initialised")
         logging.info("Note that only the 5 most recent logs are retained, "
                      "unless keep_logs is set to True.")
-        #TODO check existing number of log files and delete oldest one
+        # TODO check existing number of log files and delete oldest one
 
         # Create the config file if it doesn't exist.
         if not self.config.file_exists():
@@ -139,7 +139,7 @@ class Diary:
 
         # We need to make sure all files under the root directory are in our database.
         expected_files = [self.config.path, self.root_file]
-        #TODO extend expected_files according to EntryTracker's files
+        # TODO extend expected_files according to EntryTracker's files
         unexpected_files = [
             path for path in self.root.iterdir() if path not in expected_files
         ]
@@ -174,7 +174,7 @@ class Diary:
                             else:
                                 destination = path.with_suffix(self.PARSED_EXTENSION)
 
-                            self.et.add_file(destination, parsed_content)
+                            # self.et.add_file(destination, parsed_content)
                             self.__write_file(parsed_content, destination)
                             if path != destination:
                                 path.unlink()
@@ -198,7 +198,7 @@ class Diary:
         """
         # Update our master diary database file
         # TODO special handling if there is an Exception, no writing etc?
-        # TODO compute hash of temp and compare to dest?
+        # TODO compute hash of temp and compare?
         # TODO finally remove tmp file?
         tmp_root_file = self.root_file.with_suffix(self.root_file.suffix+"_tmp")
         with tmp_root_file.open(mode='wb') as f:
@@ -234,7 +234,7 @@ class Diary:
         if encrypted_password:
             try:
                 assert password_utf8 == encryptor.decrypt(encrypted_password)
-            except (AssertionError, InvalidSignature) as e:
+            except (AssertionError, InvalidSignature):
                 raise InvalidSignature("Password does not match.")
 
         return encryptor
@@ -328,7 +328,7 @@ class Diary:
         self.__edit_txt_file(txt_filename)
 
         # Once finished, catalogue our changes
-        file_dict = self.tdc.text_filename_to_dict(txt_filename)
+        file_dict = self.tdc.text_file_to_dict(txt_filename)
         # self.et.add_file(file_dict, txt_filename)
         self.__write_file(file_dict, data_filename)
         if delete:
