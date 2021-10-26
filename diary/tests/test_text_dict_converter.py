@@ -19,7 +19,7 @@ class TestTextToDict(unittest.TestCase):
         for text_filename, json_filename in zip_longest(text_files, json_files):
             test_name = text_filename.with_suffix("")
             with self.subTest(msg=str(test_name)):
-                output = tdc.text_filename_to_dict(text_filename)
+                output = tdc.text_file_to_dict(text_filename)
                 with open(json_filename) as jsonFile:
                     json_output = json.load(jsonFile)
                 self.assertEqual(output, json_output,
