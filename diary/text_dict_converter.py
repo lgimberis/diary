@@ -6,9 +6,14 @@ from pathlib import Path
 
 from diary.config import Config
 
-FileOrStringOrDict = typing.TypeVar("FileOrStringOrDict", typing.TextIO, str, OrderedDict)
+FileOrPathOrString = typing.TypeVar("FileOrPathOrString",
+                                    typing.TextIO, Path, str)
+FileOrStringOrDict = typing.TypeVar("FileOrStringOrDict",
+                                    typing.TextIO, str, OrderedDict)
+
 # Maximum number of category levels someone should ever need.
 MAXIMUM_SENSIBLE_CATEGORY_LEVEL = 20
+
 DEFAULT_KEY = ""
 LINE_DELIMITER = "\n"
 
@@ -25,7 +30,28 @@ class TextDictConverter:
             self.category_suffix = config[Config.CONFIG_CATEGORY_SUFFIX]
             self.subcategory_prefix = config[Config.CONFIG_SUBCATEGORY_PREFIX]
             self.subcategory_suffix = config[Config.CONFIG_SUBCATEGORY_SUFFIX]
-            self.__set_up_infinite_levels()
+
+            # Determine whether category and subcategory definitions are recursive
+            # If they are, any number of category levels are theoretically possible
+            def is_infinite_depth(category, subcategory):
+                """Determine whether iterated is a simple extension of initial."""
+                regex = r"^(.*)" + re.escape(category) + r"(.*)$"
+                if category in subcategory and (match := re.match(regex, subcategory)):
+                    return match.group(1), match.group(2)
+                return None, None
+
+            p_prefix, p_suffix = is_infinite_depth(
+                self.category_prefix, self.subcategory_prefix)
+            s_prefix, s_suffix = is_infinite_depth(
+                self.category_suffix, self.subcategory_suffix)
+
+            self.infinite = p_prefix and s_prefix
+
+            if self.infinite:
+                self.prefix_extension_prefix = p_prefix
+                self.prefix_extension_suffix = p_suffix
+                self.suffix_extension_prefix = s_prefix
+                self.suffix_extension_suffix = s_suffix
 
         def __get_regex(self, n: int, with_ends=True) -> str:
             """Get the regex pattern that would match text defining a category of level n.
@@ -35,7 +61,6 @@ class TextDictConverter:
             but may be disabled for searches which only check if
             something COULD be a category.
             """
-
             prefix, suffix = self.get_level(n)
             regex = re.escape(prefix) + r"(.*)" + re.escape(suffix)
             if with_ends:
@@ -52,7 +77,8 @@ class TextDictConverter:
                     + self.prefix_extension_suffix * n,
                     self.suffix_extension_prefix * n
                     + self.category_suffix
-                    + self.suffix_extension_suffix * n)
+                    + self.suffix_extension_suffix * n
+                )
             else:
                 if n == 1:
                     return self.category_prefix, self.category_suffix
@@ -64,7 +90,7 @@ class TextDictConverter:
                                     "higher levels")
 
         def check_line(self, line: str) -> tuple:
-            """Check whether the given string constitutes a category.
+            """Check whether the string 'line' constitutes a category or subcategory.
 
             Returns (category_level, category_name).
 
@@ -75,77 +101,39 @@ class TextDictConverter:
             prefix / suffix have been removed.
             """
 
-            if self.infinite:
-                max_level = MAXIMUM_SENSIBLE_CATEGORY_LEVEL
-                # Ensure the line at least matches the category regex partially
-                # before we run a large number of regex matches
-                check = re.match(self.__get_regex(1, with_ends=False), line)
-            else:
-                max_level = 2
-                check = True
-
-            if check:
+            # Ensure that the regex matches at least partially before we run a
+            # large number of regex checks
+            if not self.infinite or re.match(self.__get_regex(1, with_ends=False), line):
+                max_level = MAXIMUM_SENSIBLE_CATEGORY_LEVEL if self.infinite else 2
                 for level in range(1, max_level + 1):
-                    regex = self.__get_regex(level)
-                    if match := re.match(regex, line):
+                    if match := re.match(self.__get_regex(level), line):
                         return level, match.group(1)
             return 0, None
-
-        def __set_up_infinite_levels(self):
-            """Determine whether the category and subcategory definitions are recursive.
-
-            Sets self.{prefix,suffix}_extension_{prefix,suffix} and self.infinite accordingly."""
-
-            def __is_infinite_depth(initial, iterated):
-                """Determine whether iterated is a simple extended example of initial."""
-                if initial in iterated:
-                    regex = r"^(.*)" + re.escape(initial) + r"(.*)$"
-                    if match := re.match(regex, iterated):
-                        prefix = match.group(1)
-                        suffix = match.group(2)
-                        return True, prefix, suffix
-                    else:
-                        raise Exception(
-                            f"Regex {regex} is expected to match {iterated}")
-                return False, None, None
-
-            prefix_infinite, p_prefix, p_suffix = __is_infinite_depth(
-                self.category_prefix, self.subcategory_prefix)
-            suffix_infinite, s_prefix, s_suffix = __is_infinite_depth(
-                self.category_suffix, self.subcategory_suffix)
-            self.infinite = prefix_infinite and suffix_infinite
-
-            if self.infinite:
-                self.prefix_extension_prefix = p_prefix
-                self.prefix_extension_suffix = p_suffix
-                self.suffix_extension_prefix = s_prefix
-                self.suffix_extension_suffix = s_suffix
 
     def __init__(self, config: Config):
         self.config = config
 
-    def text_filename_to_dict(self, filepath: Path) -> OrderedDict:
-        """Return the content of the file named 'filepath' as OrderedDict.
+    def text_file_to_dict(self, data: FileOrPathOrString) -> OrderedDict:
+        """Return the text file represented by 'data' as an OrderedDict.
 
+        'data' may be a opened file handle, a Path to that file, or the content
+        of that file in a string.
         """
-        with filepath.open(mode='r') as f:
-            return self.text_file_to_dict(f)
-
-    def text_file_to_dict(self, f: FileOrStringOrDict) -> OrderedDict:
-        """Return the content of text file 'f' as OrderedDict.
-
-        """
-        if type(f) == str:
-            file_content_as_list = [line.strip() for line in f.split("\n")
-                                    if line.strip()]
+        if isinstance(data, Path):
+            data_iterator = data.read_text(encoding='utf-8').split("\n")
+        elif isinstance(data, str):
+            data_iterator = data.split("\n")
         else:
             # Assume file-type object
-            file_content_as_list = [line.strip() for line in f
-                                    if line.strip()]
-        return self.__string_list_to_dict(file_content_as_list)
+            data_iterator = data
 
-    def __string_list_to_dict(self, file_content_list: list) -> OrderedDict:
-        """Convert list of strings 'file_content' to OrderedDict.
+        # Minor pre-processing to remove whitespace
+        stripped_data = [line.strip() for line in data_iterator if line.strip()]
+
+        return self.__string_list_to_dict(stripped_data)
+
+    def __string_list_to_dict(self, data: list) -> OrderedDict:
+        """Convert a list of strings 'data' to OrderedDict.
 
         This function assumes text files have the following format:
         1) Keys and categories are alone on their own line
@@ -154,14 +142,13 @@ class TextDictConverter:
 
         file_content = OrderedDict()
         text_categories = []
-        key = DEFAULT_KEY
         ics = self.config[Config.CONFIG_ICS]
         formatter = self.__TextFormatAnalyser(self.config)
-        for line in file_content_list:
+        key = DEFAULT_KEY + ics
+        for line in data:
             category_level, category_name = formatter.check_line(line)
             if category_level:
-                text_categories = text_categories[:category_level - 1]
-                text_categories.append(category_name)
+                text_categories = text_categories[:category_level - 1] + [category_name]
                 key = ics.join(text_categories) + ics
             else:
                 # If the current line is not a category, it must be content
