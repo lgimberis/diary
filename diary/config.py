@@ -18,7 +18,6 @@ class Config:
     CONFIG_CATEGORY_SUFFIX = "Category_Suffix"
     CONFIG_SUBCATEGORY_PREFIX = "Subcategory_Prefix"
     CONFIG_SUBCATEGORY_SUFFIX = "Subcategory_Suffix"
-    CONFIG_USE_ENCRYPTION = "Use_Encryption"
     CONFIG_ICS = "Internal_Category_Separator"
     CONFIG_EDITOR = "Editor_Executable"
 
@@ -30,7 +29,6 @@ class Config:
             self.CONFIG_CATEGORY_SUFFIX: "]",
             self.CONFIG_SUBCATEGORY_PREFIX: "[[",
             self.CONFIG_SUBCATEGORY_SUFFIX: "]]",
-            self.CONFIG_USE_ENCRYPTION: "True",
             self.CONFIG_ICS: ";",
             self.CONFIG_EDITOR: "",
         }
@@ -123,14 +121,6 @@ class Config:
             write_value(f, self.CONFIG_CATEGORY_SUFFIX)
             write_value(f, self.CONFIG_SUBCATEGORY_PREFIX)
             write_value(f, self.CONFIG_SUBCATEGORY_SUFFIX)
-
-            f.write(
-                "\n"
-                "# Whether to use password protection and encrypt all data files. \n"
-                "# Note this will also necessarily encrypt this config.\n"
-                "# Values: True, False"
-            )
-            write_value(f, self.CONFIG_USE_ENCRYPTION)
 
             f.write(
                 "\n"

@@ -8,9 +8,6 @@ from getpass import getpass
 from collections import OrderedDict
 import typing
 
-from cryptography.exceptions import InvalidSignature
-
-from diary.encrypt import Encryptor
 # from diary.entrytracker import EntryTracker
 from diary.text_dict_converter import TextDictConverter
 from diary.config import Config
@@ -29,7 +26,6 @@ class Diary:
 
     CONFIG_FILE_NAME = "config.cfg"
     LOG_EXTENSION = ".log"
-    ENCRYPTED_EXTENSION = ".dat"
     ROOT_FILE_NAME = "diary"
     TEXT_EXTENSION = ".txt"
     PARSED_EXTENSION = ".json"
@@ -76,7 +72,6 @@ class Diary:
 
         # Appease linter by defining these variables here - overwritten before use.
         self.tdc = TextDictConverter(self.config)
-        self.encryptor = None  # The actual encryption/decryption class
 
     def __enter__(self):
         """Create or open a diary database under self.root.
@@ -152,37 +147,24 @@ class Diary:
                 print(f"Since overwriting is disabled, these files will not be modified or included.")
             else:
                 print(f"Will now attempt to resolve these.")
-                encrypt = self.config[Config.CONFIG_USE_ENCRYPTION]
-
-                if not self.encryptor and any(
-                        [path.suffix == self.ENCRYPTED_EXTENSION for path in unexpected_files]
-                ):
-                    logging.info(f"Encryptor is being set up due to presence of encrypted-looking files.")
-                    self.encryptor = self.__create_encryptor(False, self.salt)
 
                 resolved_files = 0
                 for path in unexpected_files:
-                    try:
-                        if content := self.__load_file(path):
-                            if isinstance(content, str):
-                                parsed_content = self.tdc.text_file_to_dict(content)
-                            else:
-                                parsed_content = content
-
-                            if encrypt:
-                                destination = path.with_suffix(self.ENCRYPTED_EXTENSION)
-                            else:
-                                destination = path.with_suffix(self.PARSED_EXTENSION)
-
-                            # self.et.add_file(destination, parsed_content)
-                            self.__write_file(parsed_content, destination)
-                            if path != destination:
-                                path.unlink()
-                            resolved_files += 1
+                    if content := self.__load_file(path):
+                        if isinstance(content, str):
+                            parsed_content = self.tdc.text_file_to_dict(content)
                         else:
-                            logging.debug(f"File cannot be loaded, either empty or incompatible: {str(path)}")
-                    except InvalidSignature:
-                        logging.debug(f"Failed to decrypt encrypted file:  {str(path)}")
+                            parsed_content = content
+
+                        destination = path.with_suffix(self.PARSED_EXTENSION)
+
+                        # self.et.add_file(destination, parsed_content)
+                        self.__write_file(parsed_content, destination)
+                        if path != destination:
+                            path.unlink()
+                        resolved_files += 1
+                    else:
+                        logging.debug(f"File cannot be loaded, either empty or incompatible: {str(path)}")
                 if resolved_files == len(unexpected_files):
                     logging.info(f"Successfully resolved all unexpected files.")
                 else:
@@ -202,8 +184,7 @@ class Diary:
         # TODO finally remove tmp file?
         tmp_root_file = self.root_file.with_suffix(self.root_file.suffix+"_tmp")
         with tmp_root_file.open(mode='wb') as f:
-            f.write(self.encryptor.get_salt() + b'\n')
-            # f.write(self.encryptor.encrypt(bytes(self.et)))
+            pass
         self.root_file = tmp_root_file.replace(self.root_file)
         # TODO delete log file unless self.keep_logs
 
@@ -223,27 +204,10 @@ class Diary:
                     password = getpass("Password: ")
         return password
 
-    def __create_encryptor(self, confirm: bool, salt: bytes, encrypted_password=b""):
-        """Create an Encryptor.
-
-        """
-        password = self.__get_password(confirm=confirm)
-        password_utf8 = password.encode('utf-8')
-        encryptor = Encryptor(password_utf8, salt)
-
-        if encrypted_password:
-            try:
-                assert password_utf8 == encryptor.decrypt(encrypted_password)
-            except (AssertionError, InvalidSignature):
-                raise InvalidSignature("Password does not match.")
-
-        return encryptor
-
     def __open_root_file(self):
         """Read or create a root file.
 
         1) Create a root file if it isn't present
-        2) Read/write an encrypted salt and password
         3) Read/write EntryTracker contents
         """
         create = not self.root_file.is_file()
@@ -255,29 +219,9 @@ class Diary:
 
         with self.root_file.open(mode=mode) as f:
             if create:
-                self.salt = Encryptor.random_salt()
-                encrypted_password = b""
-            else:
-                self.salt = next(f)[:-1]  # [:-1] -> Ignore trailing newlines
-                encrypted_password = next(f)[:-1]
-
-            if self.config[Config.CONFIG_USE_ENCRYPTION]:
-                self.encryptor = self.__create_encryptor(
-                    create,
-                    self.salt,
-                    encrypted_password=encrypted_password
-                )
-
-            if create:
-                f.write(self.salt + b'\n')
-                if self.config[Config.CONFIG_USE_ENCRYPTION]:
-                    message = self.encryptor.encrypt(self.encryptor.password) + b'\n'
-                else:
-                    message = b'\n'
                 # noinspection PyTypeChecker
                 f.write(message)
         # self.et = EntryTracker()
-        # self.et = EntryTracker(self.encryptor.decrypt(next(f)))
 
     def __edit_txt_file(self, filepath: Path):
         """Open filename with the provided editor.
@@ -301,7 +245,6 @@ class Diary:
     def get_file(self, prefix: str, subdirectory=None, delete=True):
         """Extract and open a .txt file corresponding to the given filename prefix.
         """
-        encrypt = self.config[Config.CONFIG_USE_ENCRYPTION]
         if subdirectory:
             basename = Path(self.root, subdirectory, prefix)
         else:
@@ -309,10 +252,7 @@ class Diary:
 
         txt_filename = basename.with_suffix(self.TEXT_EXTENSION)
 
-        if encrypt:
-            data_suffix = self.ENCRYPTED_EXTENSION
-        else:
-            data_suffix = self.PARSED_EXTENSION
+        data_suffix = self.PARSED_EXTENSION
         data_filename = basename.with_suffix(data_suffix)
 
         # Look for an existing txt_filename
@@ -362,13 +302,6 @@ class Diary:
             with source.open(mode='r') as f:
                 # noinspection PyTypeChecker
                 return json.load(f, object_pairs_hook=OrderedDict)
-        elif source.suffix == self.ENCRYPTED_EXTENSION:
-            encrypted_data = source.read_bytes()
-            if not self.encryptor:
-                raise Exception("No encryptor set, but trying to load encrypted data")
-            data = self.encryptor.decrypt(encrypted_data).decode('utf-8')
-            # noinspection PyTypeChecker
-            return json.loads(data, object_pairs_hook=OrderedDict)
         else:
             # Unknown extension
             return ""
@@ -395,9 +328,5 @@ class Diary:
             if destination.suffix == self.PARSED_EXTENSION:
                 with destination.open(mode='w') as f:
                     json.dump(serialised_data, f)
-            elif destination.suffix == self.ENCRYPTED_EXTENSION:
-                # Encrypt parsed data
-                encrypted_data = self.encryptor.encrypt(json.dumps(serialised_data).encode('utf-8'))
-                destination.write_bytes(encrypted_data)
             else:
                 raise ValueError(f"destination suffix {destination.suffix} does not match allowed values")
