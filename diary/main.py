@@ -2,7 +2,7 @@ from collections import OrderedDict
 from pathlib import Path
 import sys
 
-from .diary import Diary
+from diary.diary_handler import Diary
 
 HELP_NAME = "Help"
 EXIT_NAME = "Exit"
