@@ -1,76 +1,108 @@
-from collections import OrderedDict
 from pathlib import Path
 import sys
+from tkinter import *
+from tkinter import ttk
 
 from diary.diary_handler import Diary
 
-HELP_NAME = "Help"
-EXIT_NAME = "Exit"
 
+class DiaryProgram(Frame):
+    """Master class for the program's GUI.
+    """
+    def __init__(self, master):
+        super().__init__(master)
 
-class Command:
-    def __init__(self, aliases, help_text, function, num_arguments):
-        self.aliases = aliases
-        self.help = help_text
-        self.function = function
-        self.num_arguments = num_arguments
+        # Instantiate the Diary
+        if len(sys.argv) > 1:
+            root_directory = Path(sys.argv[1]).absolute()
+        else:
+            root_directory = Path().absolute()
+        self.diary = Diary(root_directory)
 
+        # Create a small sidebar containing a column of buttons
+        sidebar = Frame(self)
+        sidebar.grid(column=0)
 
-COMMANDS = OrderedDict([
-    (HELP_NAME, Command(["help", "h"], "Show this help", None, None)),
-    (EXIT_NAME, Command(["exit", "e"], "Stop Execution", None, None)),
-    ("Today", Command(["today", "t"], "Open today's entry", "today", 0)),
-    ("Date", Command(["date", "d"], "Open an entry corresponding to the given date", "get_entry", 1)),
-    ("Open", Command(["open", "o"], "Open a file of the given name", "get_file", 1)),
-    ("Config", Command(["config", "c"], "Open the config file for editing", "edit_config", 0))
-])
+        # Create buttons for the sidebar
+        sidebar_today = Button(sidebar, text="Today's entry", command=self.today)
+        sidebar_today.grid(row=0)
+        sidebar_search = Button(sidebar, text="Search previous entries", command=self.search)
+        sidebar_search.grid(row=1)
+        sidebar_settings = Button(sidebar, text="Settings", command=self.settings)
+        sidebar_settings.grid(row=2)
+
+        # Inline the to-do list
+        todo_list_frame = Frame(self)
+        todo_list_frame.grid(column=1)
+
+        # Add a label to the top
+        todo_list_header = Label(todo_list_frame, text="To-Do List")
+        todo_list_header.grid(row=0, sticky=N)
+        row_counter = 1
+        # Grab the current to-do list
+        todo_list_items = self.diary.get_todo_list()
+        if todo_list_items:
+            for todo_list_item in todo_list_items:
+                todo_list_item_frame = Frame(todo_list_frame)
+                todo_list_item_frame.grid(row=row_counter)
+                row_counter += 1
+                Label(todo_list_item_frame, text=todo_list_item)
+        else:
+            Label(todo_list_frame, text="List is empty!").grid(row=row_counter)
+
+        # Add buttons to the bottom of the to-do list
+        todo_list_button_add = Button(text="Add new item", command=self.add_todo_list_item)
+        todo_list_button_add.grid(row=row_counter+1, sticky=S)
+
+        # Add calendar appointments for the coming week
+        calendar_frame = Frame(self)
+        calendar_frame.grid(column=2)
+
+        calendar_frame_header = Label(calendar_frame)
+        calendar_frame_header.grid(row=0)
+
+        row_counter = 1
+        calendar_items = self.diary.get_calendar_this_week()
+        if calendar_items:
+            for calendar_item in calendar_items:
+                # TODO
+                pass
+        else:
+            Label(calendar_frame, text="No upcoming appointments").grid(row=row_counter)
+
+        # Add buttons to the bottom of the calendar
+        calendar_button_add = Button(text="Add calendar item", command=self.add_calendar_item)
+        calendar_button_add.grid(row=row_counter+1, sticky=S)
+
+    def today(self):
+        """Open up a dialog box for interacting with today's entry.
+        """
+        pass
+
+    def search(self):
+        """Open up a dialog box for searching through previous entries.
+        """
+        pass
+
+    def settings(self):
+        """Open the settings dialog box.
+        """
+        pass
+
+    def add_todo_list_item(self):
+        """Open a small prompt that adds a new to-do list item.
+        """
+
+    def add_calendar_item(self):
+        """Open up a dialog box for adding a new calendar item."""
+        pass
 
 
 def main():
-    """Use a CLI to the Diary module.
-    """
-
-    def help_text():
-        """List all the commands.
-        """
-        for command_to_explain in COMMANDS:
-            # Remove '[' and ']' from string representation
-            alias_list = str(COMMANDS[command_to_explain].aliases)[1:-1]
-            print(f"{command_to_explain} ({alias_list}) - {COMMANDS[command_to_explain].help}")
-
-    if len(sys.argv) > 1:
-        root = Path(sys.argv[1:]).absolute()
-    else:
-        root = Path().absolute()
-    with Diary(root) as d:
-        main_command = None
-        while main_command not in COMMANDS[EXIT_NAME].aliases:
-            response = [word for word in input("Enter command:\n").lower().split(" ") if word]
-            call_found = False
-            print_help = False
-
-            if len(response) > 0:
-                main_command = response[0]
-                for command in COMMANDS:
-                    if main_command in COMMANDS[command].aliases:
-                        call_found = True
-                        if command == HELP_NAME:
-                            print_help = True
-                        if COMMANDS[command].function:
-                            if len(response) == 1+COMMANDS[command].num_arguments:
-                                func = getattr(d, COMMANDS[command].function)
-                                func(*response[1:])
-                            else:
-                                print(f"Expected {COMMANDS[command].num_arguments} "
-                                      f"arguments, got {len(response) - 1}")
-            else:
-                main_command = None
-            if not call_found:
-                print("Command not recognised")
-                print_help = True
-            if print_help:
-                help_text()
-
+    root = Tk.tk()
+    program = DiaryProgram(root)
+    program.grid(sticky=(N, E, S, W))
+    root.mainloop()
 
 if __name__ == "__main__":
     main()
