@@ -28,8 +28,10 @@ class DiaryProgram(Frame):
         sidebar_today.grid(row=0)
         sidebar_search = Button(sidebar, text="Search previous entries", command=self.search)
         sidebar_search.grid(row=1)
+        sidebar_calendar = Button(sidebar, text="Calendar", command=self.add_calendar_item)
+        sidebar_calendar.grid(row=2)
         sidebar_settings = Button(sidebar, text="Settings", command=self.settings)
-        sidebar_settings.grid(row=2)
+        sidebar_settings.grid(row=3)
 
         # Inline the to-do list
         todo_list_frame = Frame(self)
@@ -69,10 +71,6 @@ class DiaryProgram(Frame):
                 pass
         else:
             Label(calendar_frame, text="No upcoming appointments").grid(row=row_counter)
-
-        # Add buttons to the bottom of the calendar
-        calendar_button_add = Button(text="Add calendar item", command=self.add_calendar_item)
-        calendar_button_add.grid(row=row_counter+1, sticky=S)
 
     def today(self):
         """Open up a dialog box for interacting with today's entry.
