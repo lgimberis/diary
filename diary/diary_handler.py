@@ -6,11 +6,11 @@ import platform
 import subprocess
 from getpass import getpass
 from collections import OrderedDict
+import sqlite3
 import typing
 
 # from diary.entrytracker import EntryTracker
 from diary.text_dict_converter import TextDictConverter
-from diary.config import Config
 
 StringOrDict = typing.TypeVar("StringOrDict", OrderedDict, str)
 
@@ -24,16 +24,13 @@ class Diary:
     get_file - Get any file with the given prefix (discard extension)
     """
 
-    CONFIG_FILE_NAME = "config.cfg"
-    LOG_EXTENSION = ".log"
-    ROOT_FILE_NAME = "diary"
-    TEXT_EXTENSION = ".txt"
-    PARSED_EXTENSION = ".json"
+    # CONFIG_FILE_NAME = "config.cfg"  # TODO add settings. Don't need any yet
+    DATABASE_FILE_NAME = "diary.db"  # Name of the main database file containing data
+    LOG_EXTENSION = ".log"  # Extension of produced log files
     ENCODING = 'utf-8'
 
     def __init__(self,
-                 root: str,  # Representation of directory in which root is created
-                 editor="",
+                 root: Path,
                  logging_level=logging.INFO,
                  may_create_database=True,  # Whether creating a database is allowed
                  may_overwrite=True,  # Whether overwriting existing files is allowed
@@ -50,7 +47,7 @@ class Diary:
         self.may_overwrite = may_overwrite
         self.keep_logs = keep_logs
 
-        self.root = Path(root)
+        self.root = root
 
         # Prepare log file directory and path
         self.log_directory = Path(self.root, "logs")
@@ -64,14 +61,23 @@ class Diary:
 
         # Initialise config
         self.config = Config(Path(self.root, self.CONFIG_FILE_NAME))
-        if editor:
-            self.config[self.config.CONFIG_EDITOR] = editor
 
         # Prepare root file
         self.root_file = Path(self.root, self.ROOT_FILE_NAME)
 
         # Appease linter by defining these variables here - overwritten before use.
         self.tdc = TextDictConverter(self.config)
+
+    def get_todo_list(self) -> list:
+        """Returns a list of strings corresponding to 'to-do' items."""
+        # TODO
+        return []
+
+    def get_calendar_this_week(self) -> list:
+        """Returns a list of tuples corresponding to (time, content) of calendar items.
+        """
+        # TODO
+        return []
 
     def __enter__(self):
         """Create or open a diary database under self.root.
@@ -111,14 +117,6 @@ class Diary:
         if not self.config.file_exists():
             logging.info("Creating config file")
             self.config.create_config_file()
-
-            logging.info("Prompting user to edit their config file ...")
-            if input("Set up config file? (y/n)").lower() != 'n':
-                logging.info("User begins editing config file...")
-                self.edit_config()
-                logging.info("... User finishes editing config file")
-            else:
-                logging.info("... User chose not to edit config file")
 
             # Reminder about how to change the config file
             print(f"Config file can be modified at any time on disk "
@@ -223,25 +221,6 @@ class Diary:
                 f.write(message)
         # self.et = EntryTracker()
 
-    def __edit_txt_file(self, filepath: Path):
-        """Open filename with the provided editor.
-        """
-        editor = self.config[self.config.CONFIG_EDITOR]
-        if editor:
-            subprocess.run([editor, str(filepath)], check=True, shell=True)
-        else:
-            if platform.system() == "Windows":
-                start_keyword = 'start'
-            elif platform.system() == "Darwin":
-                start_keyword = 'start'
-            else:
-                # TODO test
-                start_keyword = 'xdg-open'
-            subprocess.run([start_keyword, str(filepath)], check=True, shell=True)
-
-    def edit_config(self):
-        self.__edit_txt_file(self.config.path)
-
     def get_file(self, prefix: str, subdirectory=None, delete=True):
         """Extract and open a .txt file corresponding to the given filename prefix.
         """
@@ -265,7 +244,7 @@ class Diary:
                 txt_filename.touch()
 
         # Open our text file with our chosen editor
-        self.__edit_txt_file(txt_filename)
+        # ???
 
         # Once finished, catalogue our changes
         file_dict = self.tdc.text_file_to_dict(txt_filename)
