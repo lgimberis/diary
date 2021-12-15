@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 import platform
 import subprocess
-from getpass import getpass
 from collections import OrderedDict
 import sqlite3
 import typing
@@ -32,8 +31,6 @@ class Diary:
     def __init__(self,
                  root: Path,
                  logging_level=logging.INFO,
-                 may_create_database=True,  # Whether creating a database is allowed
-                 may_overwrite=True,  # Whether overwriting existing files is allowed
                  keep_logs=False,  # Whether to keep logs after closing even if nothing seems wrong
                  ):
         """Initialise structures in preparation of creating or opening a diary database under 'root'.
@@ -42,12 +39,12 @@ class Diary:
         Prepares root directory, root file, config file, log directory and file.
         Sets up a default self.config, and overwrites editor with our arg.
         """
+        self.root = root
         self.logging_level = logging_level
-        self.may_create_database = may_create_database
-        self.may_overwrite = may_overwrite
         self.keep_logs = keep_logs
 
-        self.root = root
+        self.database_file = Path(self.root, self.DATABASE_FILE_NAME)
+        self.new_database = self.database_file.is_file()
 
         # Prepare log file directory and path
         self.log_directory = Path(self.root, "logs")
@@ -59,25 +56,62 @@ class Diary:
             return filename_now
         self.log_file = Path(self.log_directory, log_filename()+self.LOG_EXTENSION)
 
-        # Initialise config
-        self.config = Config(Path(self.root, self.CONFIG_FILE_NAME))
+    def create_new_diary(self):
+        # Add categories
+        self.cur.execute('''CREATE TABLE categories (name TEXT)''')
 
-        # Prepare root file
-        self.root_file = Path(self.root, self.ROOT_FILE_NAME)
+        # Add entries
+        self.cur.execute('''CREATE TABLE entries (
+                            timestamp TEXT, 
+                            entry TEXT,
+                            category_id INTEGER,
+                            FOREIGN KEY (category_id)
+                                REFERENCES categories (rowid)
+                            )''')
 
-        # Appease linter by defining these variables here - overwritten before use.
-        self.tdc = TextDictConverter(self.config)
+        # Add tags, to define tags
+        self.cur.execute('''CREATE TABLE tags (name TEXT)''')
 
-    def get_todo_list(self) -> list:
+        # Add taginstances so each entry can have multiple tags
+        self.cur.execute('''CREATE TABLE taginstances (
+                            tag_id INTEGER,
+                            FOREIGN KEY (tag_id)
+                                REFERENCES tags (rowid),
+                            entry_id INTEGER,
+                            FOREIGN KEY (entry_id)
+                                REFERENCES entries (rowid)
+                            )''')
+
+        # Define the to-do list
+        # Each item on the to-do list only has a creation time and description
+        self.cur.execute('''CREATE TABLE todo (
+                            timestamp TEXT,
+                            description TEXT
+                            )''')
+
+        # Calendar
+        # Each item on the calendar is a reminder or appointment, and
+        # has a description, target time, and re-ocurrence frequency,
+        # the latter is typically an clean interval of time (1 day, 1 week, etc)
+        self.cur.execute('''CREATE TABLE calendar (
+                            timestamp TEXT,
+                            description TEXT, 
+                            target TEXT,
+                            frequency TEXT,
+                            )''')
+
+    def get_todo_list(self) -> sqlite3.Cursor:
         """Returns a list of strings corresponding to 'to-do' items."""
-        # TODO
-        return []
+        if not self.cur:
+            raise Exception('self.cur not set in get_todo_list')
+        return self.cur.execute('''SELECT * FROM todo''')
 
-    def get_calendar_this_week(self) -> list:
+    def get_calendar_this_week(self) -> sqlite3.Cursor:
         """Returns a list of tuples corresponding to (time, content) of calendar items.
         """
-        # TODO
-        return []
+        if not self.cur:
+            raise Exception('self.cur not set in get_calendar_this_week')
+        return self.cur.execute('''SELECT * from calendar''')
 
     def __enter__(self):
         """Create or open a diary database under self.root.
@@ -86,12 +120,9 @@ class Diary:
         that order. Log files will probably always be created because filename
         depends on the time at which this Diary object was created.
         """
-        # Create the root directory, or exit.
+        # Create the root directory
         if not self.root.is_dir():
-            if not self.may_create_database:
-                raise OSError(f"Root directory {self.root} does not exist")
-            else:
-                self.root.mkdir(parents=True)
+            self.root.mkdir(parents=True)
 
         # Create the log directory
         if not self.log_directory.is_dir():
@@ -99,7 +130,7 @@ class Diary:
             self.log_directory.mkdir()
 
         # Set up the logger
-        # Suppress erroneous problem reported due to incomplete logging.basicConfig spec
+        # Following comment suppresses erroneous problem reported due to incomplete logging.basicConfig spec
         # noinspection PyArgumentList
         logging.basicConfig(
             filename=str(self.log_file),
@@ -109,26 +140,36 @@ class Diary:
             level=self.logging_level
         )
         logging.info("Logging initialised")
-        logging.info("Note that only the 5 most recent logs are retained, "
-                     "unless keep_logs is set to True.")
-        # TODO check existing number of log files and delete oldest one
+        # TODO better management of log files
 
-        # Create the config file if it doesn't exist.
-        if not self.config.file_exists():
-            logging.info("Creating config file")
-            self.config.create_config_file()
-
-            # Reminder about how to change the config file
-            print(f"Config file can be modified at any time on disk "
-                  f"(at {str(self.config.path)})"
-                  f"or via the 'c' or 'config' commands.")
-
-        # Create or read the root file, or exit.
-        logging.info(f"Root file exists: {str(self.root_file.is_file())}")
-        if self.root_file.is_file() or self.may_create_database:
-            self.__open_root_file()
+        # Connect to the database file
+        self.con = sqlite3.connect(self.database_file)
+        self.con.execute('PRAGMA foreign_keys = on')
+        self.cur = self.con.cursor()
+        if self.new_database:
+            # Create new database
+            self.create_new_diary()
         else:
-            raise OSError(f"Root file {self.root_file} does not exist")
+            # Open existing database - need to check everything is as expected
+            # TODO
+            pass
+
+        # # Create the config file if it doesn't exist.
+        # if not self.config.file_exists():
+        #     logging.info("Creating config file")
+        #     self.config.create_config_file()
+        #
+        #     # Reminder about how to change the config file
+        #     print(f"Config file can be modified at any time on disk "
+        #           f"(at {str(self.config.path)})"
+        #           f"or via the 'c' or 'config' commands.")
+
+        # # Create or read the root file, or exit.
+        # logging.info(f"Root file exists: {str(self.root_file.is_file())}")
+        # if self.root_file.is_file() or self.may_create_database:
+        #     self.__open_root_file()
+        # else:
+        #     raise OSError(f"Root file {self.root_file} does not exist")
 
         # We need to make sure all files under the root directory are in our database.
         expected_files = [self.config.path, self.root_file]
@@ -176,136 +217,10 @@ class Diary:
         """Write to our master diary database file.
 
         """
-        # Update our master diary database file
-        # TODO special handling if there is an Exception, no writing etc?
-        # TODO compute hash of temp and compare?
-        # TODO finally remove tmp file?
-        tmp_root_file = self.root_file.with_suffix(self.root_file.suffix+"_tmp")
-        with tmp_root_file.open(mode='wb') as f:
-            pass
-        self.root_file = tmp_root_file.replace(self.root_file)
-        # TODO delete log file unless self.keep_logs
+        # Save and close database
+        self.con.commit()
+        self.con.close()
 
-    @staticmethod
-    def __get_password(confirm=False):
-        """Get the user's password from standard input.
-        """
-        password = getpass("Password: ")
-        if confirm:
-            passwords_match = False
-            while not passwords_match:
-                # TODO should we exit when passwords are wrong instead?
-                repeat_password = getpass("Repeat password: ")
-                passwords_match = (password == repeat_password)
-                if not passwords_match:
-                    print("Passwords do not match. Please try again")
-                    password = getpass("Password: ")
-        return password
-
-    def __open_root_file(self):
-        """Read or create a root file.
-
-        1) Create a root file if it isn't present
-        3) Read/write EntryTracker contents
-        """
-        create = not self.root_file.is_file()
-
-        if create:
-            mode = 'w+b'
-        else:
-            mode = 'r+b'
-
-        with self.root_file.open(mode=mode) as f:
-            if create:
-                # noinspection PyTypeChecker
-                f.write(message)
-        # self.et = EntryTracker()
-
-    def get_file(self, prefix: str, subdirectory=None, delete=True):
-        """Extract and open a .txt file corresponding to the given filename prefix.
-        """
-        if subdirectory:
-            basename = Path(self.root, subdirectory, prefix)
-        else:
-            basename = Path(self.root, prefix)
-
-        txt_filename = basename.with_suffix(self.TEXT_EXTENSION)
-
-        data_suffix = self.PARSED_EXTENSION
-        data_filename = basename.with_suffix(data_suffix)
-
-        # Look for an existing txt_filename
-        if not txt_filename.is_file():
-            if data_filename.is_file():
-                # Create a text file from the packed file
-                self.__write_file(self.__load_file(data_filename), txt_filename)
-            else:
-                # Create an empty text file
-                txt_filename.touch()
-
-        # Open our text file with our chosen editor
-        # ???
-
-        # Once finished, catalogue our changes
-        file_dict = self.tdc.text_file_to_dict(txt_filename)
-        # self.et.add_file(file_dict, txt_filename)
-        self.__write_file(file_dict, data_filename)
-        if delete:
-            # Remove our text file
-            txt_filename.unlink()
-
-    def get_entry(self, date):
-        """Open the file for the entry on the given date.
-
-        date - datetime.date
-        """
-        prefix = f"{date.year:04}_{date.month:02}_{date.day:02}"
-        self.get_file(prefix, subdirectory="entries")
-
-    def today(self):
-        """Open the file for today's entry.
-        """
-        date_today = datetime.date.today()
-        self.get_entry(date_today)
-
-    def __load_file(self, source: Path) -> StringOrDict:
-        """Loads the data in the file at Path 'source'.
-
-        The return value will be either a read text file (str) or a parsed
-        data file (OrderedDict). The return value type can be anticipated
-        from the file suffix and/or inferred.
-        """
-        if source.suffix == self.TEXT_EXTENSION:
-            return source.read_text(encoding='utf-8')
-        elif source.suffix == self.PARSED_EXTENSION:
-            with source.open(mode='r') as f:
-                # noinspection PyTypeChecker
-                return json.load(f, object_pairs_hook=OrderedDict)
-        else:
-            # Unknown extension
-            return ""
-
-    def __write_file(self, data: StringOrDict, destination: Path) -> None:
-        """Writes 'data' to the file at Path 'destination'.
-
-        Data should either be a read text file (str) or a parsed data file
-        (OrderedDict).
-        Destination file format is inferred from extension.
-        """
-        if destination.suffix == self.TEXT_EXTENSION:
-            if isinstance(data, OrderedDict):
-                deserialised_data = self.tdc.json_file_to_text(data)
-            else:
-                deserialised_data = data
-            destination.write_text(deserialised_data, encoding='utf-8')
-        else:
-            if isinstance(data, str):
-                serialised_data = self.tdc.text_file_to_dict(data)
-            else:
-                serialised_data = data
-
-            if destination.suffix == self.PARSED_EXTENSION:
-                with destination.open(mode='w') as f:
-                    json.dump(serialised_data, f)
-            else:
-                raise ValueError(f"destination suffix {destination.suffix} does not match allowed values")
+        # Manage log file
+        if not self.keep_logs:
+            self.log_file.unlink()

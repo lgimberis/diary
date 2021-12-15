@@ -17,6 +17,7 @@ class DiaryProgram(Frame):
             root_directory = Path(sys.argv[1]).absolute()
         else:
             root_directory = Path().absolute()
+
         self.diary = Diary(root_directory)
 
         # Create a small sidebar containing a column of buttons
@@ -101,6 +102,7 @@ def main():
     program = DiaryProgram(root)
     program.grid(sticky=(N, E, S, W))
     root.mainloop()
+
 
 if __name__ == "__main__":
     main()
