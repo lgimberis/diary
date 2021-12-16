@@ -121,8 +121,14 @@ class DiaryProgram(Frame):
         def cancel(*args):
             entry.destroy()
 
+        entry_field.focus()
+
         Button(entry, text="Add", command=add).grid(row=2, column=0)
         Button(entry, text="Cancel", command=cancel).grid(row=2, column=1)
+
+        entry.bind('<Return>', add)
+        entry.bind('<Escape>', cancel)
+
 
 
     def add_calendar_item(self):
