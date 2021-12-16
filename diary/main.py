@@ -5,12 +5,13 @@ from tkinter import ttk
 
 from diary.diary_handler import Diary
 
-
 class DiaryProgram(Frame):
     """Master class for the program's GUI.
     """
     def __init__(self, master):
         super().__init__(master)
+
+        self.red_cross = PhotoImage(file='./red_cross.png')
 
         # Instantiate the Diary
         if len(sys.argv) > 1:
@@ -69,9 +70,12 @@ class DiaryProgram(Frame):
         todo_list_items = list(self.diary.get_todo_list())
         if todo_list_items:
             todo_list_item_frame = Frame(todo_list_frame)
-            todo_list_item_frame.grid(row=1, sticky=N)
-            for row, (timestamp, text) in enumerate(todo_list_items):
-                Label(todo_list_item_frame, text=text).grid(row=row)
+            todo_list_item_frame.grid(row=1, column=0, columnspan=2, sticky=N)
+            for row, (rowid, timestamp, text) in enumerate(todo_list_items):
+                ttk.Button(todo_list_item_frame, image=self.red_cross,
+                           command=self.todo_list_item_remover_factory(rowid)) \
+                    .grid(row=row, column=0, sticky=W)
+                ttk.Label(todo_list_item_frame, text=text).grid(row=row, column=1, sticky=E)
         else:
             Label(todo_list_frame, text="List is empty!").grid(row=1)
 
@@ -83,6 +87,12 @@ class DiaryProgram(Frame):
         """Open up a dialog box for interacting with today's entry.
         """
         pass
+
+    def todo_list_item_remover_factory(self, rowid):
+        def f(*args):
+            self.diary.remove_todo_list_item(rowid)
+            self.refresh()
+        return f
 
     def search(self):
         """Open up a dialog box for searching through previous entries.

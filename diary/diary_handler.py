@@ -96,7 +96,12 @@ class Diary:
         """Returns a list of strings corresponding to 'to-do' items."""
         if not self.cur:
             raise Exception('self.cur not set in get_todo_list')
-        return self.cur.execute('''SELECT * FROM todo''')
+        return self.cur.execute('''SELECT rowid, * FROM todo''')
+
+    def remove_todo_list_item(self, rowid):
+        if self.cur:
+            self.cur.execute(f"DELETE FROM todo WHERE rowid = {rowid}")
+        self.con.commit()
 
 
     def get_calendar_this_week(self) -> sqlite3.Cursor:
