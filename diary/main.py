@@ -4,6 +4,8 @@ from tkinter import *
 from tkinter import ttk
 
 from diary.diary_handler import Diary
+from diary.scroll_frame import ScrollFrame
+
 
 class DiaryProgram(Frame):
     """Master class for the program's GUI.
@@ -24,7 +26,9 @@ class DiaryProgram(Frame):
 
         # Create a small sidebar containing a column of buttons
         sidebar = Frame(self)
-        sidebar.grid(row=0, column=0)
+        sidebar.grid(row=0, column=0, sticky="NW")
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=1)
 
         # Create buttons for the sidebar
         sidebar_today = Button(sidebar, text="Today's entry", command=self.today)
@@ -38,7 +42,9 @@ class DiaryProgram(Frame):
 
         # Inline the to-do list
         self.todo_list_frame = None
-        self.refresh()
+        self.refresh_todo()
+
+        self.grid_columnconfigure(1, weight=3)
 
         # Add calendar appointments for the coming week
         calendar_frame = Frame(self)
@@ -56,32 +62,37 @@ class DiaryProgram(Frame):
         else:
             Label(calendar_frame, text="No upcoming appointments").grid(row=row_counter)
 
-    def refresh(self):
+    def refresh_todo(self):
         if self.todo_list_frame:
             self.todo_list_frame.destroy()
         todo_list_frame = Frame(self, background="red")
-        todo_list_frame.grid(row=0, column=1, sticky="NS")
+        todo_list_frame.grid(row=0, column=1, sticky="NESW")
         self.todo_list_frame = todo_list_frame
 
         # Add a label to the top
         todo_list_header = Label(todo_list_frame, text="To-Do List")
-        todo_list_header.grid(row=0, sticky=N)
+        todo_list_header.grid(row=0, sticky="NEW")
         # Grab the current to-do list
         todo_list_items = list(self.diary.get_todo_list())
         if todo_list_items:
-            todo_list_item_frame = Frame(todo_list_frame)
+            #todo_list_item_scrollbar = ttk.Scrollbar(todo_list_frame, orient=VERTICAL)
+            todo_list_item_frame = ScrollFrame(todo_list_frame)
+            #Frame(todo_list_frame, yscrollcommand=todo_list_item_scrollbar.set)
             todo_list_item_frame.grid(row=1, column=0, columnspan=2, sticky=N)
+
+            #todo_list_item_scrollbar.config(command=todo_list_item_frame.yview)
             for row, (rowid, timestamp, text) in enumerate(todo_list_items):
-                ttk.Button(todo_list_item_frame, image=self.red_cross,
+                ttk.Button(todo_list_item_frame.viewPort, image=self.red_cross,
                            command=self.todo_list_item_remover_factory(rowid)) \
-                    .grid(row=row, column=0, sticky=W)
-                ttk.Label(todo_list_item_frame, text=text).grid(row=row, column=1, sticky=E)
+                    .grid(row=row, column=0, sticky="NS")
+                Message(todo_list_item_frame.viewPort, text=text).grid(row=row, column=1, sticky="EW")
+                todo_list_item_frame.rowconfigure(row, weight=1)
         else:
             Label(todo_list_frame, text="List is empty!").grid(row=1)
 
         # Add buttons to the bottom of the to-do list
         todo_list_button_add = Button(todo_list_frame, text="Add new item", command=self.add_todo_list_item)
-        todo_list_button_add.grid(row=2, sticky=S)
+        todo_list_button_add.grid(row=2, sticky="EWS")
 
     def today(self):
         """Open up a dialog box for interacting with today's entry.
@@ -91,7 +102,7 @@ class DiaryProgram(Frame):
     def todo_list_item_remover_factory(self, rowid):
         def f(*args):
             self.diary.remove_todo_list_item(rowid)
-            self.refresh()
+            self.refresh_todo()
         return f
 
     def search(self):
@@ -115,7 +126,7 @@ class DiaryProgram(Frame):
 
         def add(*args):
             self.diary.add_todo_list_item(text.get())
-            self.refresh()
+            self.refresh_todo()
             entry.destroy()
 
         def cancel(*args):
@@ -140,6 +151,8 @@ def main():
     root = Tk()
     program = DiaryProgram(root)
     program.grid(sticky=(N, E, S, W))
+    root.grid_columnconfigure(0, weight=1)
+    root.grid_rowconfigure(0, weight=1)
     root.mainloop()
 
 
