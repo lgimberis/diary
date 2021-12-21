@@ -4,7 +4,7 @@ from tkinter import *
 from tkinter import ttk
 
 from diary.diary_handler import Diary
-from diary.scroll_frame import ScrollFrame
+from diary.scroll_frame import ScrollableFrame
 
 
 class DiaryProgram(Frame):
@@ -75,17 +75,14 @@ class DiaryProgram(Frame):
         # Grab the current to-do list
         todo_list_items = list(self.diary.get_todo_list())
         if todo_list_items:
-            #todo_list_item_scrollbar = ttk.Scrollbar(todo_list_frame, orient=VERTICAL)
-            todo_list_item_frame = ScrollFrame(todo_list_frame)
-            #Frame(todo_list_frame, yscrollcommand=todo_list_item_scrollbar.set)
+            todo_list_item_frame = ScrollableFrame(todo_list_frame)
             todo_list_item_frame.grid(row=1, column=0, columnspan=2, sticky=N)
 
-            #todo_list_item_scrollbar.config(command=todo_list_item_frame.yview)
             for row, (rowid, timestamp, text) in enumerate(todo_list_items):
-                ttk.Button(todo_list_item_frame.viewPort, image=self.red_cross,
+                ttk.Button(todo_list_item_frame.view, image=self.red_cross,
                            command=self.todo_list_item_remover_factory(rowid)) \
                     .grid(row=row, column=0, sticky="NS")
-                Message(todo_list_item_frame.viewPort, text=text).grid(row=row, column=1, sticky="EW")
+                Message(todo_list_item_frame.view, text=text).grid(row=row, column=1, sticky="EW")
                 todo_list_item_frame.rowconfigure(row, weight=1)
         else:
             Label(todo_list_frame, text="List is empty!").grid(row=1)
