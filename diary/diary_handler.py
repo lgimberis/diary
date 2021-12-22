@@ -48,28 +48,35 @@ class Diary:
 
     def create_new_diary(self):
         # Add categories
-        self.cur.execute('''CREATE TABLE categories (name TEXT);''')
+        self.cur.execute('''CREATE TABLE categories (categoryid INTEGER PRIMARY KEY, category TEXT);''')
 
         # Add entries
         self.cur.execute('''CREATE TABLE entries (
+                            entryid INTEGER PRIMARY KEY,
                             timestamp TEXT, 
                             entry TEXT,
-                            category_id INTEGER,
-                            FOREIGN KEY (category_id)
-                                REFERENCES categories (rowid)
+                            categoryid INTEGER,
+                            FOREIGN KEY (categoryid)
+                                REFERENCES categories (categoryid)
                             );''')
 
         # Add tags, to define tags
-        self.cur.execute('''CREATE TABLE tags (name TEXT);''')
+        self.cur.execute('''CREATE TABLE tags (
+                            tagid INTEGER PRIMARY KEY,
+                            tag TEXT, 
+                            categoryid INTEGER, 
+                            FOREIGN KEY (categoryid)
+                                REFERENCES categories (categoryid)
+                            );''')
 
         # Add taginstances so each entry can have multiple tags
         self.cur.execute('''CREATE TABLE taginstances (
-                            tag_id INTEGER,
-                            entry_id INTEGER,
-                            FOREIGN KEY (tag_id)
-                                REFERENCES tags (rowid),
-                            FOREIGN KEY (entry_id)
-                                REFERENCES entries (rowid)
+                            tagid INTEGER,
+                            entryid INTEGER,
+                            FOREIGN KEY (tagid)
+                                REFERENCES tags (tagid),
+                            FOREIGN KEY (entryid)
+                                REFERENCES entries (entryid)
                             );''')
 
         # Define the to-do list
@@ -103,7 +110,6 @@ class Diary:
             self.cur.execute(f"DELETE FROM todo WHERE rowid = {rowid}")
         self.con.commit()
 
-
     def get_calendar_this_week(self) -> sqlite3.Cursor:
         """Returns a list of tuples corresponding to (time, content) of calendar items.
         """
@@ -111,9 +117,63 @@ class Diary:
             raise Exception('self.cur not set in get_calendar_this_week')
         return self.cur.execute('''SELECT * from calendar''')
 
+    def get_today(self):
+        """Return existing entries for today's diary."""
+        if not self.cur:
+            raise Exception('self.cur not set in get_today')
+        date = self.get_timestamp().split(' ')[0]
+        return self.cur.execute(f'''SELECT rowid, timestamp, entry FROM entries WHERE timestamp LIKE "{date}%"''')
+
+    def get_categories(self):
+        if self.cur:
+            return self.cur.execute(f'''SELECT * FROM categories''')
+
+    def get_tags(self, category):
+        if self.cur:
+            return self.cur.execute(f'''SELECT * FROM tags''')
+
+    def add_entry(self, text, category, timestamp=None, tags=None):
+        """Add a new entry to the entries and taginstances databases
+
+        Also adds any nonexisting categories or tags to respective databases."""
+
+        if not timestamp:
+            timestamp = self.get_timestamp()
+
+        if self.cur:
+            category_list = list(self.cur.execute(f'''SELECT rowid, * FROM categories WHERE category = "{category}"'''))
+            if not category_list:
+                self.cur.execute(f'''INSERT INTO categories (category) VALUES ("{category}")''')
+                #self.con.commit()
+                category_list = list(self.cur.execute(f'''SELECT last_insert_rowid()'''))
+            category_rowid = int(category_list[0][0])  # rowid of first result, or last insert rowid
+
+            self.cur.execute(f'''INSERT INTO entries (timestamp, entry, categoryid) VALUES ("{timestamp}", "{text}", {category_rowid})''')
+            #self.con.commit()
+            entry_rowid = int(list(self.cur.execute(f'''SELECT last_insert_rowid()'''))[0][0])
+
+            if tags:
+                for tag in tags:
+                    tag_list = list(self.cur.execute(f'''SELECT rowid, * FROM tags WHERE tag = "{tag}"'''))
+                    if not tag_list:
+                        self.cur.execute(f'''INSERT INTO tags (tag) VALUES ("{tag}")''')
+                        #self.con.commit()
+                        tag_list = list(self.cur.execute(f'''SELECT last_insert_rowid()'''))
+                    tag_rowid = int(tag_list[0][0])
+
+                    self.cur.execute(f'''INSERT INTO taginstances (tagid, entryid) VALUES ({tag_rowid}, {entry_rowid})''')
+        self.con.commit()
+
+    def edit_today(self):
+        pass
+
+    @staticmethod
+    def get_timestamp() -> str:
+        """Return a string representing a date in the format YYYY-MM-DD HH:MM:SS.UUUUUU"""
+        return datetime.datetime.now().isoformat(sep=' ')
+
     def add_todo_list_item(self, text):
-        timestamp = datetime.datetime.now().isoformat(sep=' ')
-        self.cur.execute(f'INSERT INTO todo VALUES ("{timestamp}", "{text}")')
+        self.cur.execute(f'INSERT INTO todo VALUES ("{self.get_timestamp()}", "{text}")')
         self.con.commit()
 
     def __enter__(self):
