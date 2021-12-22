@@ -12,9 +12,10 @@ class ScrollableFrame(tk.Frame):
         self.__scrollbar = tk.Scrollbar(self, orient="vertical", command=self.__canvas.yview)
         self.__canvas.configure(yscrollcommand=self.__scrollbar.set)
 
-        self.__scrollbar.pack(side="right", fill="y")
-        self.__canvas.pack(side="left", fill="both", expand=True)
-        self.__canvas_window = self.__canvas.create_window((4, 4), window=self.view, anchor="nw", tags="self.view")
+        self.__canvas.grid(row=0, column=0, sticky="NESW")#(side="left", fill="both", expand=True)
+        self.__scrollbar.grid(row=0, column=1, sticky="NS")  #.pack(side="right", fill="y")
+        self.grid_columnconfigure(0, weight=1)
+        self.__canvas_window = self.__canvas.create_window((0, 0), window=self.view, anchor="nw", tags="self.view")
 
         # Bind resizing events
         self.view.bind("<Configure>", self.__on_frame_configure)
