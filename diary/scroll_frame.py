@@ -3,12 +3,12 @@ import platform
 
 
 class ScrollableFrame(tk.Frame):
-    def __init__(self, parent):
+    def __init__(self, parent, background="#ffffff"):
         super().__init__(parent)
 
         # Place __canvas with a nested frame on self, and a __scrollbar
-        self.__canvas = tk.Canvas(self, borderwidth=0, background="#ffffff")
-        self.view = tk.Frame(self.__canvas, background="#ffffff")
+        self.__canvas = tk.Canvas(self, borderwidth=0, background=background)
+        self.view = tk.Frame(self.__canvas, background=background)
         self.__scrollbar = tk.Scrollbar(self, orient="vertical", command=self.__canvas.yview)
         self.__canvas.configure(yscrollcommand=self.__scrollbar.set)
 
