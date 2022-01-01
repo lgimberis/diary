@@ -46,6 +46,11 @@ class DiaryProgram(Frame):
         self.todo_list_labels = []
         self.refresh_todo()
 
+        # Prepare 'today' variables
+        self.today_no_entries_label = None
+        self.today_entries = []
+        self.today_entries_frame = None
+
         self.grid_columnconfigure(1, weight=3)
 
         # Add calendar appointments for the coming week
@@ -90,7 +95,7 @@ class DiaryProgram(Frame):
         # Grab the current to-do list
         todo_list_items = list(self.diary.get_todo_list())
         if todo_list_items:
-            todo_list_item_frame = ScrollableFrame(todo_list_frame)
+            todo_list_item_frame = ScrollableFrame(todo_list_frame, background="SystemButtonFace")
             todo_list_item_frame.grid(row=1, columnspan=2, sticky="NESW")
 
             self.todo_list_labels = []
@@ -113,29 +118,45 @@ class DiaryProgram(Frame):
     def manage_tags(self):
         pass
 
+    def refresh_today(self):
+        if self.today_entries_frame:
+            if self.today_entries:
+                for timestamp_label, content_label in self.today_entries:
+                    timestamp_label.destroy()
+                    content_label.destroy()
+            if self.today_no_entries_label:
+                self.today_no_entries_label.destroy()
+
+            self.today_entries = []
+            if entries := self.diary.get_today():
+                for row, (rowid, timestamp, entry_text) in enumerate(entries):
+                    timestamp_time = re.search(r"\d\d:\d\d", timestamp)
+
+                    timestamp_label = ttk.Label(self.today_entries_frame.view, text=timestamp_time.group(0))
+                    timestamp_label.grid(row=row, column=0, sticky="NESW")
+                    content_label = ttk.Label(self.today_entries_frame.view, text=entry_text, wraplength=400)
+                    content_label.grid(row=row, column=1, sticky="NESW")
+
+                    self.today_entries.append((timestamp_label, content_label))
+            else:
+                self.today_no_entries_label = ttk.Label(self.today_entries_frame.view, text="No entries yet.").grid(row=0, column=0, sticky="NESW")
+
     def today(self):
         """Open up a dialog box for interacting with today's entry.
         """
         entry = Toplevel(self)
 
-        existing_entries = ScrollableFrame(entry)
-        existing_entries.grid(row=0, columnspan=2, sticky="NESW")
-        todays_entries = self.diary.get_today()
-        if todays_entries:
-            for row, (rowid, timestamp, entry_text) in enumerate(todays_entries):
-                timestamp_time = re.search(r"\d\d:\d\d", timestamp)
-                timestamp_label = ttk.Label(existing_entries.view, text=timestamp_time.group(0))
-                timestamp_label.grid(row=row, column=0, sticky="NESW")
-                content_label = ttk.Label(existing_entries.view, text=entry_text, wraplength=400)
-                content_label.grid(row=row, column=1, sticky="NESW")
-        else:
-            ttk.Label(existing_entries.view, text="No entries yet.").grid(row=0, column=0, sticky="NESW")
+        # Instantiate entries
+        self.today_entries_frame = ScrollableFrame(entry, background="SystemButtonFace")
+        self.today_entries_frame.grid(row=0, columnspan=2, sticky="NESW")
+        self.refresh_today()
 
-
+        # Add a text entry box
         text = StringVar()
         entry_field = ttk.Entry(entry, textvariable=text)
         entry_field.grid(row=1, columnspan=2, sticky="NESW")
 
+        # Add a category selection / input combobox
         categories = [row[0] for row in self.diary.get_categories()]
         if self.DEFAULT_CATEGORY not in categories:
             categories.append(self.DEFAULT_CATEGORY)
@@ -144,9 +165,11 @@ class DiaryProgram(Frame):
         category_field = ttk.Combobox(entry, textvariable=category, values=categories)
         category_field.grid(row=2, column=0)
 
+        # Tag management
         tag_frame = Frame(entry)
         tag_frame.grid(row=2, column=1)
 
+        # Tag box is a Listbox with which user selects their tags
         tag_box = Listbox(tag_frame)
         tag_box.grid(row=0, column=0)
         tag_scrollbar = ttk.Scrollbar(tag_frame, orient=VERTICAL, command=tag_box.yview)
@@ -154,23 +177,27 @@ class DiaryProgram(Frame):
         tag_box.configure(yscrollcommand=tag_scrollbar.set)
         tag_button = ttk.Button(tag_box, text="Manage Tags", command=self.manage_tags)
         tag_button.grid(row=1, column=0, sticky="W")
-
         category_tags = self.diary.get_tags(category.get())
         for rowid, tag in enumerate(category_tags):
             tag_box.insert(rowid, tag)
 
+        # Add 'add' and 'close' buttons
         def add(*args):
             tags = [item[1] for item in tag_box.curselection()]
             self.diary.add_entry(text.get(), category.get(), tags=tags)
             text.set("")
             category.set(self.DEFAULT_CATEGORY)
             tag_box.selection_clear(0, END)
+            self.refresh_today()
 
         def close(*args):
             entry.destroy()
 
         submit_button = ttk.Button(entry, text="Submit", command=add).grid(row=5, column=0)
-        cancel_button = ttk.Button(entry, text="Close", command=close).grid(row=5, column=1)
+        close_button = ttk.Button(entry, text="Close", command=close).grid(row=5, column=1)
+
+        entry.bind('<Return>', add)
+        entry.bind('<Escape>', close)
 
     def todo_list_item_remover_factory(self, rowid):
         def f(*args):
