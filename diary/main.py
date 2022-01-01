@@ -157,7 +157,7 @@ class DiaryProgram(Frame):
         entry_field.grid(row=1, columnspan=2, sticky="NESW")
 
         # Add a category selection / input combobox
-        categories = [row[0] for row in self.diary.get_categories()]
+        categories = [row[1] for row in self.diary.get_categories()]
         if self.DEFAULT_CATEGORY not in categories:
             categories.append(self.DEFAULT_CATEGORY)
         category = StringVar()
@@ -183,12 +183,13 @@ class DiaryProgram(Frame):
 
         # Add 'add' and 'close' buttons
         def add(*args):
-            tags = [item[1] for item in tag_box.curselection()]
-            self.diary.add_entry(text.get(), category.get(), tags=tags)
-            text.set("")
-            category.set(self.DEFAULT_CATEGORY)
-            tag_box.selection_clear(0, END)
-            self.refresh_today()
+            if len(text.get()) > 0:
+                tags = [item[1] for item in tag_box.curselection()]
+                self.diary.add_entry(text.get(), category.get(), tags=tags)
+                text.set("")
+                category.set(self.DEFAULT_CATEGORY)
+                tag_box.selection_clear(0, END)
+                self.refresh_today()
 
         def close(*args):
             entry.destroy()
