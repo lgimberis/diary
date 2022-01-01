@@ -126,7 +126,7 @@ class Diary:
 
     def get_categories(self):
         if self.cur:
-            return self.cur.execute(f'''SELECT * FROM categories''')
+            return self.cur.execute(f'''SELECT categoryid, category FROM categories''')
 
     def get_tags(self, category):
         if self.cur:
