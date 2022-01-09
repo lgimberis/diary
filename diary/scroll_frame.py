@@ -22,10 +22,8 @@ class ScrollableFrame(tk.Frame):
         self.__canvas.bind("<Configure>", self.__on_canvas_configure)
 
         # Bind mouse scroll wheel when focus/cursor is in the 'view'
-        self.view.bind('<Enter>', self.__on_enter)
-        self.view.bind('<Leave>', self.__on_exit)
-
-        self.__on_frame_configure(None)
+        self.bind('<Enter>', self.__on_enter)
+        self.bind('<Leave>', self.__on_exit)
 
     def __on_frame_configure(self, event):
         """Reset the scroll region based on the __canvas' current bounds"""
