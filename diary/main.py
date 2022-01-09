@@ -11,6 +11,7 @@ class DiaryProgram(Frame):
     """Master class for the program's GUI.
     """
     DEFAULT_CATEGORY = "Diary"
+    WRAPPING_STATIC_GAP = 30  # Width of scrollbar in pixels, plus a little extra space.
 
     def __init__(self, master):
         super().__init__(master)
@@ -118,7 +119,15 @@ class DiaryProgram(Frame):
     def manage_tags(self):
         pass
 
-    def refresh_today(self):
+    @staticmethod
+    def wrap_labels(master, labels):
+        def f(*args):
+            offset = max([t.winfo_width() for t, c in labels]) + DiaryProgram.WRAPPING_STATIC_GAP
+            for t, label in labels:
+                label.configure(wraplength=max(master.winfo_width() - offset, 1))
+        return f
+
+    def refresh_today(self, *args):
         if self.today_entries_frame:
             if self.today_entries:
                 for timestamp_label, content_label in self.today_entries:
@@ -134,10 +143,12 @@ class DiaryProgram(Frame):
 
                     timestamp_label = ttk.Label(self.today_entries_frame.view, text=timestamp_time.group(0))
                     timestamp_label.grid(row=row, column=0, sticky="NESW")
-                    content_label = ttk.Label(self.today_entries_frame.view, text=entry_text, wraplength=400)
+                    content_label = ttk.Label(self.today_entries_frame.view, text=entry_text)
                     content_label.grid(row=row, column=1, sticky="NESW")
 
                     self.today_entries.append((timestamp_label, content_label))
+                self.today_entries_frame.view.bind('<Configure>',
+                                                   self.wrap_labels(self.today_entries_frame.view, self.today_entries))
             else:
                 self.today_no_entries_label = ttk.Label(self.today_entries_frame.view, text="No entries yet.").grid(row=0, column=0, sticky="NESW")
 
@@ -145,6 +156,8 @@ class DiaryProgram(Frame):
         """Open up a dialog box for interacting with today's entry.
         """
         entry = Toplevel(self)
+        entry.grid_rowconfigure(0, weight=1)
+        entry.grid_columnconfigure(0, weight=1)
 
         # Instantiate entries
         self.today_entries_frame = ScrollableFrame(entry, background="SystemButtonFace")
