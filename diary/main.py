@@ -12,6 +12,7 @@ class DiaryProgram(Frame):
     """
     DEFAULT_CATEGORY = "Diary"
     WRAPPING_STATIC_GAP = 30  # Width of scrollbar in pixels, plus a little extra space.
+    DELETE_BUTTON_WIDTH = 20  # Width in pixels of the todo-list 'delete' button
 
     def __init__(self, master):
         super().__init__(master)
@@ -70,13 +71,12 @@ class DiaryProgram(Frame):
         else:
             Label(calendar_frame, text="No upcoming appointments").grid(row=row_counter)
 
-        #self.on_resize()
         self.bind("<Configure>", self.on_resize)
 
     def on_resize(self, *args):
         if self.todo_list_labels:
             bbox = self.todo_list_frame.bbox(self.todo_list_labels[0])
-            width = bbox[2] - 50  # TODO dynamically find scrollbar/delete button width
+            width = bbox[2] - self.WRAPPING_STATIC_GAP - self.DELETE_BUTTON_WIDTH
             for label in self.todo_list_labels:
                 label.configure(wraplength=width)
 
@@ -116,13 +116,13 @@ class DiaryProgram(Frame):
         todo_list_button_add = Button(todo_list_frame, text="Add new item", command=self.add_todo_list_item)
         todo_list_button_add.grid(row=2, sticky="EWS")
 
-    def manage_tags(self):
-        pass
-
     @staticmethod
     def wrap_labels(master, labels):
+
         def f(*args):
-            offset = max([t.winfo_width() for t, c in labels]) + DiaryProgram.WRAPPING_STATIC_GAP
+            offset = DiaryProgram.WRAPPING_STATIC_GAP
+            if labels:
+                offset += max([t.winfo_width() for t, c in labels])
             for t, label in labels:
                 label.configure(wraplength=max(master.winfo_width() - offset, 1))
         return f
@@ -178,30 +178,12 @@ class DiaryProgram(Frame):
         category_field = ttk.Combobox(entry, textvariable=category, values=categories)
         category_field.grid(row=2, column=0)
 
-        # Tag management
-        tag_frame = Frame(entry)
-        tag_frame.grid(row=2, column=1)
-
-        # Tag box is a Listbox with which user selects their tags
-        tag_box = Listbox(tag_frame)
-        tag_box.grid(row=0, column=0)
-        tag_scrollbar = ttk.Scrollbar(tag_frame, orient=VERTICAL, command=tag_box.yview)
-        tag_scrollbar.grid(row=0, column=1)
-        tag_box.configure(yscrollcommand=tag_scrollbar.set)
-        tag_button = ttk.Button(tag_box, text="Manage Tags", command=self.manage_tags)
-        tag_button.grid(row=1, column=0, sticky="W")
-        category_tags = self.diary.get_tags(category.get())
-        for rowid, tag in enumerate(category_tags):
-            tag_box.insert(rowid, tag)
-
         # Add 'add' and 'close' buttons
         def add(*args):
             if len(text.get()) > 0:
-                tags = [item[1] for item in tag_box.curselection()]
-                self.diary.add_entry(text.get(), category.get(), tags=tags)
+                self.diary.add_entry(text.get(), category.get())
                 text.set("")
                 category.set(self.DEFAULT_CATEGORY)
-                tag_box.selection_clear(0, END)
                 self.refresh_today()
 
         def close(*args):
