@@ -9,12 +9,118 @@ from diary.diary_handler import Diary
 from diary.scroll_frame import ScrollableFrame
 
 
+DEFAULT_CATEGORY = "Diary"
+WRAPPING_STATIC_GAP = 30  # Width of scrollbar in pixels, plus a little extra space.
+
+
+def wrap_labels(master, labels):
+    def f(*args):
+        offset = WRAPPING_STATIC_GAP
+        if labels:
+            offset += max([t.winfo_width() for t, c in labels])
+        for t, label in labels:
+            label.configure(wraplength=max(master.winfo_width() - offset, 1))
+    return f
+
+
+class TodayWindow(Frame):
+    def __bool__(self):
+        return bool(self.root.winfo_exists())
+
+    def __init__(self, master, background="SystemButtonFace"):
+        self.master = master
+        self.root = Toplevel(master)
+        self.root.grid_rowconfigure(0, weight=1)
+        self.root.grid_columnconfigure(0, weight=1)
+
+        self.entry_labels = []
+        self.no_entries_label = None
+
+        # Instantiate entries
+        self.entries_frame = ScrollableFrame(self.root, background=background)
+        self.entries_frame.grid(row=0, column=1, columnspan=3, sticky="NESW")
+        self.entries_frame.grid_columnconfigure(0, weight=1)
+
+        # Add a text entry box
+        self.entry_field = ScrolledText(self.root, height=5, wrap=WORD)
+        self.entry_field.grid(row=1, column=1, columnspan=3, sticky="NESW")
+
+        # Add a category selection / input combobox
+        categories = [row[1] for row in self.master.get_diary().get_categories()]
+        if DEFAULT_CATEGORY not in categories:
+            categories.append(DEFAULT_CATEGORY)
+        category = StringVar()
+        category.set(DEFAULT_CATEGORY)
+        self.category_combobox = ttk.Combobox(self.root, textvariable=category, values=categories)
+        self.category_combobox.grid(row=2, column=1, sticky="NESW")
+
+        # Add 'add' and 'close' buttons
+        def add(*args):
+            message = self.entry_field.get("1.0", "end-1c").strip()
+            if len(message) > 0:
+                self.master.get_diary().add_entry(message, category.get())
+                self.entry_field.delete("1.0", "end-1c")
+                self.refresh()
+
+        def close(*args):
+            self.root.destroy()
+
+        self.submit_button = ttk.Button(self.root, text="Submit", command=add).grid(row=2, column=2, sticky="E")
+        close_button = ttk.Button(self.root, text="Close", command=close).grid(row=2, column=3, sticky="E")
+
+        self.entry_field.focus()
+
+        self.root.bind('<Shift-Return>', lambda x: None)
+        self.root.bind('<Return>', add)
+        self.root.bind('<Escape>', close)
+
+        self.refresh()
+
+    def refresh(self):
+        # Update combobox categories
+        categories = [row[1] for row in self.master.get_diary().get_categories()]
+        self.category_combobox["values"] = categories
+
+        # Redraw all entries. Delete the labels
+        if self.entry_labels:
+            for timestamp_label, content_label in self.entry_labels:
+                timestamp_label.destroy()
+                content_label.destroy()
+        if self.no_entries_label:
+            self.no_entries_label.destroy()
+            self.no_entries_label = None
+
+        self.entry_labels = []
+        if entries := self.master.get_diary().get_today():
+            for row, (rowid, timestamp, entry_text) in enumerate(entries):
+                timestamp_time = re.search(r"\d\d:\d\d", timestamp)
+
+                timestamp_label = ttk.Label(self.entries_frame.view, text=timestamp_time.group(0))
+                timestamp_label.grid(row=row, column=0, sticky="NESW")
+                content_label = ttk.Label(self.entries_frame.view, text=entry_text)
+                content_label.grid(row=row, column=1, sticky="NESW")
+
+                self.entry_labels.append((timestamp_label, content_label))
+            #self.entries_frame.view.bind('<Configure>', wrap_labels(self.entries_frame.view, self.entry_labels))
+        else:
+            self.no_entries_label = ttk.Label(self.entries_frame.view, text="No entries yet.").grid(
+                row=0, column=0, sticky="NESW")
+
+    def update(self):
+        if self.entry_labels:
+            bbox_t, bbox_c = self.root.bbox(self.entry_labels[0][0]), self.root.bbox(self.entry_labels[0][1])
+            print(bbox_t, bbox_c)
+            width = max(bbox_c[2] - WRAPPING_STATIC_GAP - bbox_t[2], 0)
+            for label_t, label_c in self.entry_labels:
+                label_c.configure(wraplength=width)
+
+
 class DiaryProgram(Frame):
     """Master class for the program's GUI.
     """
     DEFAULT_CATEGORY = "Diary"
-    WRAPPING_STATIC_GAP = 30  # Width of scrollbar in pixels, plus a little extra space.
     DELETE_BUTTON_WIDTH = 20  # Width in pixels of the todo-list 'delete' button
+    BACKGROUND = "#f0f0f0"
 
     def __init__(self, master):
         super().__init__(master)
@@ -50,10 +156,7 @@ class DiaryProgram(Frame):
         self.todo_list_labels = []
         self.refresh_todo()
 
-        # Prepare 'today' variables
-        self.today_no_entries_label = None
-        self.today_entries = []
-        self.today_entries_frame = None
+        self.today_window = None
 
         self.grid_columnconfigure(1, weight=3)
 
@@ -76,9 +179,11 @@ class DiaryProgram(Frame):
     def update(self, *args):
         if self.todo_list_labels:
             bbox = self.todo_list_frame.bbox(self.todo_list_labels[0])
-            width = max(bbox[2] - self.WRAPPING_STATIC_GAP - self.DELETE_BUTTON_WIDTH, 0)
+            width = max(bbox[2] - WRAPPING_STATIC_GAP - self.DELETE_BUTTON_WIDTH, 0)
             for label in self.todo_list_labels:
                 label.configure(wraplength=width)
+        if self.today_window:
+            self.today_window.update()
 
     def refresh_todo(self):
         if self.todo_list_frame:
@@ -96,14 +201,14 @@ class DiaryProgram(Frame):
         # Grab the current to-do list
         todo_list_items = list(self.diary.get_todo_list())
         if todo_list_items:
-            todo_list_item_frame = ScrollableFrame(todo_list_frame, background="SystemButtonFace")
+            todo_list_item_frame = ScrollableFrame(todo_list_frame, background=self.BACKGROUND)
             todo_list_item_frame.grid(row=1, columnspan=2, sticky="NESW")
 
             self.todo_list_labels = []
 
             for row, (rowid, timestamp, text) in enumerate(todo_list_items):
                 ttk.Button(todo_list_item_frame.view, image=self.red_cross,
-                           command=self.todo_list_item_remover_factory(rowid)) \
+                           command=self.todo_list_item_remover_builder(rowid)) \
                     .grid(row=row, column=0, sticky="NESW")
                 label = ttk.Label(todo_list_item_frame.view, text=text, wraplength=20)
                 label.grid(row=row, column=1, sticky="NESW")
@@ -116,86 +221,15 @@ class DiaryProgram(Frame):
         todo_list_button_add = Button(todo_list_frame, text="Add new item", command=self.add_todo_list_item)
         todo_list_button_add.grid(row=2, sticky="EWS")
 
-    @staticmethod
-    def wrap_labels(master, labels):
-
-        def f(*args):
-            offset = DiaryProgram.WRAPPING_STATIC_GAP
-            if labels:
-                offset += max([t.winfo_width() for t, c in labels])
-            for t, label in labels:
-                label.configure(wraplength=max(master.winfo_width() - offset, 1))
-        return f
-
-    def refresh_today(self, *args):
-        if self.today_entries_frame:
-            if self.today_entries:
-                for timestamp_label, content_label in self.today_entries:
-                    timestamp_label.destroy()
-                    content_label.destroy()
-            if self.today_no_entries_label:
-                self.today_no_entries_label.destroy()
-
-            self.today_entries = []
-            if entries := self.diary.get_today():
-                for row, (rowid, timestamp, entry_text) in enumerate(entries):
-                    timestamp_time = re.search(r"\d\d:\d\d", timestamp)
-
-                    timestamp_label = ttk.Label(self.today_entries_frame.view, text=timestamp_time.group(0))
-                    timestamp_label.grid(row=row, column=0, sticky="NESW")
-                    content_label = ttk.Label(self.today_entries_frame.view, text=entry_text)
-                    content_label.grid(row=row, column=1, sticky="NESW")
-
-                    self.today_entries.append((timestamp_label, content_label))
-                self.today_entries_frame.view.bind('<Configure>',
-                                                   self.wrap_labels(self.today_entries_frame.view, self.today_entries))
-            else:
-                self.today_no_entries_label = ttk.Label(self.today_entries_frame.view, text="No entries yet.").grid(row=0, column=0, sticky="NESW")
-
     def today(self):
         """Open up a dialog box for interacting with today's entry.
         """
-        entry = Toplevel(self)
-        entry.grid_rowconfigure(0, weight=1)
-        entry.grid_columnconfigure(0, weight=1)
+        self.today_window = TodayWindow(self)
 
-        # Instantiate entries
-        self.today_entries_frame = ScrollableFrame(entry, background="SystemButtonFace")
-        self.today_entries_frame.grid(row=0, columnspan=2, sticky="NESW")
-        self.refresh_today()
+    def get_diary(self):
+        return self.diary
 
-        # Add a text entry box
-        text = StringVar()
-        entry_field = ttk.Entry(entry, textvariable=text)
-        entry_field.grid(row=1, columnspan=2, sticky="NESW")
-
-        # Add a category selection / input combobox
-        categories = [row[1] for row in self.diary.get_categories()]
-        if self.DEFAULT_CATEGORY not in categories:
-            categories.append(self.DEFAULT_CATEGORY)
-        category = StringVar()
-        category.set(self.DEFAULT_CATEGORY)
-        category_field = ttk.Combobox(entry, textvariable=category, values=categories)
-        category_field.grid(row=2, column=0)
-
-        # Add 'add' and 'close' buttons
-        def add(*args):
-            if len(text.get()) > 0:
-                self.diary.add_entry(text.get(), category.get())
-                text.set("")
-                category.set(self.DEFAULT_CATEGORY)
-                self.refresh_today()
-
-        def close(*args):
-            entry.destroy()
-
-        submit_button = ttk.Button(entry, text="Submit", command=add).grid(row=5, column=0)
-        close_button = ttk.Button(entry, text="Close", command=close).grid(row=5, column=1)
-
-        entry.bind('<Return>', add)
-        entry.bind('<Escape>', close)
-
-    def todo_list_item_remover_factory(self, rowid):
+    def todo_list_item_remover_builder(self, rowid):
         def f(*args):
             self.diary.remove_todo_list_item(rowid)
             self.refresh_todo()
@@ -232,11 +266,9 @@ class DiaryProgram(Frame):
         Button(entry, text="Add", command=add).grid(row=2, column=0)
         Button(entry, text="Cancel", command=cancel).grid(row=2, column=1)
 
-        entry.bind('<Shift-Return>', lambda x:None)  # Allow user to shift-return to enter newlines
+        entry.bind('<Shift-Return>', lambda x: None)  # Allow user to shift-return to enter newlines
         entry.bind('<Return>', add)
         entry.bind('<Escape>', cancel)
-
-
 
     def add_calendar_item(self):
         """Open up a dialog box for adding a new calendar item."""
