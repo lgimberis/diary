@@ -3,6 +3,11 @@ import platform
 
 
 class ScrollableFrame(tk.Frame):
+    """A Frame which supports a vertical scrollbar to scroll its contents.
+
+    Any widgets intended to be placed within this frame should have its 'view' as a parent.
+    """
+
     def __init__(self, parent, background="#ffffff"):
         super().__init__(parent)
 
@@ -26,6 +31,8 @@ class ScrollableFrame(tk.Frame):
         self.bind('<Enter>', self.__on_enter)
         self.bind('<Leave>', self.__on_exit)
 
+        self.__platform = platform.system()
+
     def __on_frame_configure(self, event):
         """Reset the scroll region based on the __canvas' current bounds"""
         self.__canvas.configure(scrollregion=self.__canvas.bbox("all"))
@@ -35,10 +42,12 @@ class ScrollableFrame(tk.Frame):
         canvas_width = event.width
         self.__canvas.itemconfig(self.__canvas_window, width=canvas_width)
 
-    def __on_mouse_wheel_scroll(self, event):
-        if platform.system() == 'Windows':
+    def __on_scroll(self, event):
+        """Perform scrolling of the view.
+        """
+        if self.__platform == 'Windows':
             self.__canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-        elif platform.system() == 'Darwin':
+        elif self.__platform == 'Darwin':
             self.__canvas.yview_scroll(int(-1 * event.delta), "units")
         else:
             if event.num == 4:
@@ -47,16 +56,18 @@ class ScrollableFrame(tk.Frame):
                 self.__canvas.yview_scroll(1, "units")
     
     def __on_enter(self, event):
-        """Bind mouse wheel scroll to scroll the __canvas when the cursor enters the __canvas"""
-        if platform.system() == 'Linux':
-            self.__canvas.bind_all("<Button-4>", self.__on_mouse_wheel_scroll)
-            self.__canvas.bind_all("<Button-5>", self.__on_mouse_wheel_scroll)
+        """Bind mouse wheel scroll to scroll the canvas.
+        """
+        if self.__platform == 'Linux':
+            self.__canvas.bind_all("<Button-4>", self.__on_scroll)
+            self.__canvas.bind_all("<Button-5>", self.__on_scroll)
         else:
-            self.__canvas.bind_all("<MouseWheel>", self.__on_mouse_wheel_scroll)
+            self.__canvas.bind_all("<MouseWheel>", self.__on_scroll)
 
     def __on_exit(self, event):
-        """Unbind mouse wheel scroll controls from the __canvas when cursor leaves the __canvas"""
-        if platform.system() == 'Linux':
+        """Unbind mouse wheel scroll controls on the canvas when cursor leaves the canvas.
+        """
+        if self.__platform == 'Linux':
             self.__canvas.unbind_all("<Button-4>")
             self.__canvas.unbind_all("<Button-5>")
         else:
