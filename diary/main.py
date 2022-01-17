@@ -3,6 +3,7 @@ import re, sys
 import time
 from tkinter import *
 from tkinter import ttk
+from tkinter.scrolledtext import ScrolledText
 
 from diary.diary_handler import Diary
 from diary.scroll_frame import ScrollableFrame
@@ -214,13 +215,12 @@ class DiaryProgram(Frame):
         """Open a small prompt that adds a new to-do list item.
         """
         entry = Toplevel(self)
-        text = StringVar()
         ttk.Label(entry, text="Enter a new item to add to the to-do list:").grid(row=0, column=0, columnspan=2)
-        entry_field = ttk.Entry(entry, textvariable=text)
+        entry_field = ScrolledText(entry, wrap=WORD)
         entry_field.grid(row=1, column=0, columnspan=2)
 
         def add(*args):
-            self.diary.add_todo_list_item(text.get())
+            self.diary.add_todo_list_item(entry_field.get("1.0", "end-1c").strip())
             entry.destroy()
             self.refresh_todo()
 
@@ -232,6 +232,7 @@ class DiaryProgram(Frame):
         Button(entry, text="Add", command=add).grid(row=2, column=0)
         Button(entry, text="Cancel", command=cancel).grid(row=2, column=1)
 
+        entry.bind('<Shift-Return>', lambda x:None)  # Allow user to shift-return to enter newlines
         entry.bind('<Return>', add)
         entry.bind('<Escape>', cancel)
 
