@@ -112,7 +112,7 @@ class Diary:
     def add_entry(self, text, category, timestamp=None):
         """Add a new entry to the entries database
 
-        Also adds any nonexisting categories to the categories database."""
+        Also adds any nonexistent categories to the categories database."""
 
         if not timestamp:
             timestamp = self.get_timestamp()

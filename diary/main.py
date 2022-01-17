@@ -1,5 +1,6 @@
 from pathlib import Path
 import re, sys
+import time
 from tkinter import *
 from tkinter import ttk
 
@@ -71,12 +72,10 @@ class DiaryProgram(Frame):
         else:
             Label(calendar_frame, text="No upcoming appointments").grid(row=row_counter)
 
-        self.bind("<Configure>", self.on_resize)
-
-    def on_resize(self, *args):
+    def update(self, *args):
         if self.todo_list_labels:
             bbox = self.todo_list_frame.bbox(self.todo_list_labels[0])
-            width = bbox[2] - self.WRAPPING_STATIC_GAP - self.DELETE_BUTTON_WIDTH
+            width = max(bbox[2] - self.WRAPPING_STATIC_GAP - self.DELETE_BUTTON_WIDTH, 0)
             for label in self.todo_list_labels:
                 label.configure(wraplength=width)
 
@@ -105,7 +104,7 @@ class DiaryProgram(Frame):
                 ttk.Button(todo_list_item_frame.view, image=self.red_cross,
                            command=self.todo_list_item_remover_factory(rowid)) \
                     .grid(row=row, column=0, sticky="NESW")
-                label = ttk.Label(todo_list_item_frame.view, text=text, wraplength=400)
+                label = ttk.Label(todo_list_item_frame.view, text=text, wraplength=20)
                 label.grid(row=row, column=1, sticky="NESW")
                 self.todo_list_labels.append(label)
                 todo_list_item_frame.rowconfigure(row, weight=1)
@@ -222,8 +221,8 @@ class DiaryProgram(Frame):
 
         def add(*args):
             self.diary.add_todo_list_item(text.get())
-            self.refresh_todo()
             entry.destroy()
+            self.refresh_todo()
 
         def cancel(*args):
             entry.destroy()
@@ -249,8 +248,15 @@ def main():
     program.grid(sticky=(N, E, S, W))
     root.grid_columnconfigure(0, weight=1)
     root.grid_rowconfigure(0, weight=1)
-    root.mainloop()
-
+    try:
+        while True:
+            time.sleep(0.017)
+            root.update_idletasks()
+            root.update()
+            program.update()
+    except TclError as e:
+        # Expected normal close of the program
+        pass
 
 
 if __name__ == "__main__":
