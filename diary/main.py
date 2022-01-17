@@ -11,6 +11,7 @@ from diary.scroll_frame import ScrollableFrame
 
 DEFAULT_CATEGORY = "Diary"
 WRAPPING_STATIC_GAP = 30  # Width of scrollbar in pixels, plus a little extra space.
+TIMESTAMP_WIDTH = 20
 
 
 def wrap_labels(master, labels):
@@ -31,7 +32,7 @@ class TodayWindow(Frame):
         self.master = master
         self.root = Toplevel(master)
         self.root.grid_rowconfigure(0, weight=1)
-        self.root.grid_columnconfigure(0, weight=1)
+        self.root.grid_columnconfigure(1, weight=1)
 
         self.entry_labels = []
         self.no_entries_label = None
@@ -99,18 +100,17 @@ class TodayWindow(Frame):
                 timestamp_label.grid(row=row, column=0, sticky="NESW")
                 content_label = ttk.Label(self.entries_frame.view, text=entry_text)
                 content_label.grid(row=row, column=1, sticky="NESW")
+                self.entries_frame.view.rowconfigure(row, weight=1)
 
                 self.entry_labels.append((timestamp_label, content_label))
-            #self.entries_frame.view.bind('<Configure>', wrap_labels(self.entries_frame.view, self.entry_labels))
         else:
             self.no_entries_label = ttk.Label(self.entries_frame.view, text="No entries yet.").grid(
                 row=0, column=0, sticky="NESW")
 
     def update(self):
         if self.entry_labels:
-            bbox_t, bbox_c = self.root.bbox(self.entry_labels[0][0]), self.root.bbox(self.entry_labels[0][1])
-            print(bbox_t, bbox_c)
-            width = max(bbox_c[2] - WRAPPING_STATIC_GAP - bbox_t[2], 0)
+            bbox = self.root.bbox(self.entry_labels[0][0])
+            width = max(bbox[2] - WRAPPING_STATIC_GAP - TIMESTAMP_WIDTH, 0)
             for label_t, label_c in self.entry_labels:
                 label_c.configure(wraplength=width)
 
