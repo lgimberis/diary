@@ -117,9 +117,8 @@ class TodayWindow(Frame):
                 label_c.configure(wraplength=width)
 
 
-class TodoManager(Frame):
+class TodoManager:
     def __init__(self, master, diary, image):
-        super().__init__(master)
         self.master = master
         self.diary = diary
         self.root = None
@@ -130,9 +129,6 @@ class TodoManager(Frame):
 
     def __bool__(self):
         return bool(self.root.winfo_exists()) if self.root else False
-
-    def grid(self, **kwargs):
-        super().grid(kwargs)
 
     def refresh(self):
         if self.root:
