@@ -41,14 +41,17 @@ class TodayWindow(Frame):
 
         # Instantiate entries
         self.entries_frame = ScrollableFrame(self.root, background=background)
-        self.entries_frame.grid(row=0, column=1, columnspan=3, sticky="NESW")
+        self.entries_frame.grid(row=0, column=0, columnspan=4, sticky="NESW")
         self.entries_frame.grid_columnconfigure(0, weight=1)
 
         # Add a text entry box
         self.entry_field = ScrolledText(self.root, height=5, wrap=WORD)
-        self.entry_field.grid(row=1, column=1, columnspan=3, sticky="NESW")
+        self.entry_field.grid(row=1, column=0, columnspan=4, sticky="NESW")
 
         # Add a category selection / input combobox
+        self.category_label = ttk.Label(self.root, text="Category: ")
+        self.category_label.grid(row=2, column=0, sticky="W")
+
         categories = [row[1] for row in self.master.get_diary().get_categories()]
         if DEFAULT_CATEGORY not in categories:
             categories.append(DEFAULT_CATEGORY)
