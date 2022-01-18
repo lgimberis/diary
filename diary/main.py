@@ -12,6 +12,8 @@ from diary.scroll_frame import ScrollableFrame
 DEFAULT_CATEGORY = "Diary"
 WRAPPING_STATIC_GAP = 30  # Width of scrollbar in pixels, plus a little extra space.
 TIMESTAMP_WIDTH = 20
+BACKGROUND = "#f0f0f0"
+DELETE_BUTTON_WIDTH = 20  # Width in pixels of the todo-list 'delete' button
 
 
 def wrap_labels(master, labels):
@@ -28,7 +30,7 @@ class TodayWindow(Frame):
     def __bool__(self):
         return bool(self.root.winfo_exists())
 
-    def __init__(self, master, background="SystemButtonFace"):
+    def __init__(self, master, background=BACKGROUND):
         self.master = master
         self.root = Toplevel(master)
         self.root.grid_rowconfigure(0, weight=1)
@@ -115,12 +117,99 @@ class TodayWindow(Frame):
                 label_c.configure(wraplength=width)
 
 
+class TodoManager(Frame):
+    def __init__(self, master, diary, image):
+        super().__init__(master)
+        self.master = master
+        self.diary = diary
+        self.root = None
+        self.todo_list_labels = []
+        self.image = image
+
+        self.refresh()
+
+    def __bool__(self):
+        return bool(self.root.winfo_exists()) if self.root else False
+
+    def grid(self, **kwargs):
+        super().grid(kwargs)
+
+    def refresh(self):
+        if self.root:
+            self.root.destroy()
+        todo_list_frame = Frame(self.master, background="red")
+        self.root = todo_list_frame
+
+        todo_list_frame.grid(row=0, column=1, sticky="NESW")
+        todo_list_frame.columnconfigure(1, weight=1)
+        todo_list_frame.rowconfigure(1, weight=1)
+
+        # Add a label to the top
+        todo_list_header = Label(todo_list_frame, text="To-Do List")
+        todo_list_header.grid(row=0, sticky="NEW")
+        # Grab the current to-do list
+        todo_list_items = list(self.diary.get_todo_list())
+        if todo_list_items:
+            todo_list_item_frame = ScrollableFrame(todo_list_frame, background=BACKGROUND)
+            todo_list_item_frame.grid(row=1, columnspan=2, sticky="NESW")
+
+            self.todo_list_labels = []
+
+            for row, (rowid, timestamp, text) in enumerate(todo_list_items):
+                ttk.Button(todo_list_item_frame.view, image=self.image,
+                           command=self.remove_todo_list_item_builder(rowid)) \
+                    .grid(row=row, column=0, sticky="NESW")
+                label = ttk.Label(todo_list_item_frame.view, text=text, wraplength=20)
+                label.grid(row=row, column=1, sticky="NESW")
+                self.todo_list_labels.append(label)
+                todo_list_item_frame.rowconfigure(row, weight=1)
+        else:
+            Label(todo_list_frame, text="List is empty!").grid(row=1)
+
+        # Add buttons to the bottom of the to-do list
+        todo_list_button_add = Button(todo_list_frame, text="Add new item", command=self.add_todo_list_item)
+        todo_list_button_add.grid(row=2, sticky="EWS")
+
+    def update(self):
+        if self.todo_list_labels:
+            bbox = self.root.bbox(self.todo_list_labels[0])
+            width = max(bbox[2] - WRAPPING_STATIC_GAP - DELETE_BUTTON_WIDTH, 0)
+            for label in self.todo_list_labels:
+                label.configure(wraplength=width)
+
+    def add_todo_list_item(self):
+        entry = Toplevel(self.master)
+        ttk.Label(entry, text="Enter a new item to add to the to-do list:").grid(row=0, column=0, columnspan=2)
+        entry_field = ScrolledText(entry, wrap=WORD)
+        entry_field.grid(row=1, column=0, columnspan=2)
+
+        def add(*args):
+            self.diary.add_todo_list_item(entry_field.get("1.0", "end-1c").strip())
+            entry.destroy()
+            self.refresh()
+
+        def cancel(*args):
+            entry.destroy()
+
+        entry_field.focus()
+
+        Button(entry, text="Add", command=add).grid(row=2, column=0)
+        Button(entry, text="Cancel", command=cancel).grid(row=2, column=1)
+
+        entry.bind('<Shift-Return>', lambda x: None)  # Allow user to shift-return to enter newlines
+        entry.bind('<Return>', add)
+        entry.bind('<Escape>', cancel)
+
+    def remove_todo_list_item_builder(self, rowid):
+        def f(*args):
+            self.diary.remove_todo_list_item(rowid)
+            self.refresh()
+        return f
+
+
 class DiaryProgram(Frame):
     """Master class for the program's GUI.
     """
-    DEFAULT_CATEGORY = "Diary"
-    DELETE_BUTTON_WIDTH = 20  # Width in pixels of the todo-list 'delete' button
-    BACKGROUND = "#f0f0f0"
 
     def __init__(self, master):
         super().__init__(master)
@@ -152,9 +241,7 @@ class DiaryProgram(Frame):
         sidebar_settings.grid(row=3, sticky=(W, E))
 
         # Inline the to-do list
-        self.todo_list_frame = None
-        self.todo_list_labels = []
-        self.refresh_todo()
+        self.todo_list = TodoManager(self, self.diary, self.red_cross)
 
         self.today_window = None
 
@@ -177,49 +264,10 @@ class DiaryProgram(Frame):
             Label(calendar_frame, text="No upcoming appointments").grid(row=row_counter)
 
     def update(self, *args):
-        if self.todo_list_labels:
-            bbox = self.todo_list_frame.bbox(self.todo_list_labels[0])
-            width = max(bbox[2] - WRAPPING_STATIC_GAP - self.DELETE_BUTTON_WIDTH, 0)
-            for label in self.todo_list_labels:
-                label.configure(wraplength=width)
+        if self.todo_list:
+            self.todo_list.update()
         if self.today_window:
             self.today_window.update()
-
-    def refresh_todo(self):
-        if self.todo_list_frame:
-            self.todo_list_frame.destroy()
-        todo_list_frame = Frame(self, background="red")
-        self.todo_list_frame = todo_list_frame
-
-        todo_list_frame.grid(row=0, column=1, sticky="NESW")
-        todo_list_frame.columnconfigure(0, weight=1)
-        todo_list_frame.rowconfigure(1, weight=1)
-
-        # Add a label to the top
-        todo_list_header = Label(todo_list_frame, text="To-Do List")
-        todo_list_header.grid(row=0, sticky="NEW")
-        # Grab the current to-do list
-        todo_list_items = list(self.diary.get_todo_list())
-        if todo_list_items:
-            todo_list_item_frame = ScrollableFrame(todo_list_frame, background=self.BACKGROUND)
-            todo_list_item_frame.grid(row=1, columnspan=2, sticky="NESW")
-
-            self.todo_list_labels = []
-
-            for row, (rowid, timestamp, text) in enumerate(todo_list_items):
-                ttk.Button(todo_list_item_frame.view, image=self.red_cross,
-                           command=self.todo_list_item_remover_builder(rowid)) \
-                    .grid(row=row, column=0, sticky="NESW")
-                label = ttk.Label(todo_list_item_frame.view, text=text, wraplength=20)
-                label.grid(row=row, column=1, sticky="NESW")
-                self.todo_list_labels.append(label)
-                todo_list_item_frame.rowconfigure(row, weight=1)
-        else:
-            Label(todo_list_frame, text="List is empty!").grid(row=1)
-
-        # Add buttons to the bottom of the to-do list
-        todo_list_button_add = Button(todo_list_frame, text="Add new item", command=self.add_todo_list_item)
-        todo_list_button_add.grid(row=2, sticky="EWS")
 
     def today(self):
         """Open up a dialog box for interacting with today's entry.
@@ -228,12 +276,6 @@ class DiaryProgram(Frame):
 
     def get_diary(self):
         return self.diary
-
-    def todo_list_item_remover_builder(self, rowid):
-        def f(*args):
-            self.diary.remove_todo_list_item(rowid)
-            self.refresh_todo()
-        return f
 
     def search(self):
         """Open up a dialog box for searching through previous entries.
@@ -244,31 +286,6 @@ class DiaryProgram(Frame):
         """Open the settings dialog box.
         """
         pass
-
-    def add_todo_list_item(self):
-        """Open a small prompt that adds a new to-do list item.
-        """
-        entry = Toplevel(self)
-        ttk.Label(entry, text="Enter a new item to add to the to-do list:").grid(row=0, column=0, columnspan=2)
-        entry_field = ScrolledText(entry, wrap=WORD)
-        entry_field.grid(row=1, column=0, columnspan=2)
-
-        def add(*args):
-            self.diary.add_todo_list_item(entry_field.get("1.0", "end-1c").strip())
-            entry.destroy()
-            self.refresh_todo()
-
-        def cancel(*args):
-            entry.destroy()
-
-        entry_field.focus()
-
-        Button(entry, text="Add", command=add).grid(row=2, column=0)
-        Button(entry, text="Cancel", command=cancel).grid(row=2, column=1)
-
-        entry.bind('<Shift-Return>', lambda x: None)  # Allow user to shift-return to enter newlines
-        entry.bind('<Return>', add)
-        entry.bind('<Escape>', cancel)
 
     def add_calendar_item(self):
         """Open up a dialog box for adding a new calendar item."""
