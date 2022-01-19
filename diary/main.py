@@ -10,15 +10,15 @@ from diary.scroll_frame import ScrollableFrame
 
 
 DEFAULT_CATEGORY = "Diary"
-WRAPPING_STATIC_GAP = 30  # Width of scrollbar in pixels, plus a little extra space.
-TIMESTAMP_WIDTH = 20
+SCROLLBAR_WIDTH = 30  # Width of scrollbar in pixels, plus a little extra space.
+TIMESTAMP_WIDTH = 40
 BACKGROUND = "#f0f0f0"
 DELETE_BUTTON_WIDTH = 20  # Width in pixels of the todo-list 'delete' button
 
 
 def wrap_labels(master, labels):
     def f(*args):
-        offset = WRAPPING_STATIC_GAP
+        offset = SCROLLBAR_WIDTH
         if labels:
             offset += max([t.winfo_width() for t, c in labels])
         for t, label in labels:
@@ -40,7 +40,7 @@ class TodayWindow(Frame):
         self.no_entries_label = None
 
         # Instantiate entries
-        self.entries_frame = ScrollableFrame(self.root, background=background)
+        self.entries_frame = EntryFrame(self.root, background=background)
         self.entries_frame.grid(row=0, column=0, columnspan=4, sticky="NESW")
         self.entries_frame.grid_columnconfigure(0, weight=1)
 
@@ -48,10 +48,9 @@ class TodayWindow(Frame):
         self.entry_field = ScrolledText(self.root, height=5, wrap=WORD)
         self.entry_field.grid(row=1, column=0, columnspan=4, sticky="NESW")
 
-        # Add a category selection / input combobox
+        # Add a category selection / input combobox, and a label for it
         self.category_label = ttk.Label(self.root, text="Category: ")
         self.category_label.grid(row=2, column=0, sticky="W")
-
         categories = [row[1] for row in self.master.get_diary().get_categories()]
         if DEFAULT_CATEGORY not in categories:
             categories.append(DEFAULT_CATEGORY)
@@ -65,6 +64,8 @@ class TodayWindow(Frame):
             message = self.entry_field.get("1.0", "end-1c").strip()
             if len(message) > 0:
                 self.master.get_diary().add_entry(message, category.get())
+                _timestamp = self.master.get_diary().get_time_of_day()
+                self.entries_frame.add_entry(message, _timestamp.split(' ')[0])
                 self.entry_field.delete("1.0", "end-1c")
                 self.refresh()
 
@@ -80,6 +81,10 @@ class TodayWindow(Frame):
         self.root.bind('<Return>', add)
         self.root.bind('<Escape>', close)
 
+        if entries := self.master.get_diary().get_today():
+            for row, (rowid, timestamp, entry_text) in enumerate(entries):
+                timestamp_time = re.search(r"\d\d:\d\d", timestamp)
+                self.entries_frame.add_entry(entry_text, timestamp_time.group(0))
         self.refresh()
 
     def refresh(self):
@@ -87,37 +92,74 @@ class TodayWindow(Frame):
         categories = [row[1] for row in self.master.get_diary().get_categories()]
         self.category_combobox["values"] = categories
 
-        # Redraw all entries. Delete the labels
-        if self.entry_labels:
-            for timestamp_label, content_label in self.entry_labels:
-                timestamp_label.destroy()
-                content_label.destroy()
-        if self.no_entries_label:
-            self.no_entries_label.destroy()
-            self.no_entries_label = None
+    def update(self):
+        self.entries_frame.update()
 
-        self.entry_labels = []
-        if entries := self.master.get_diary().get_today():
-            for row, (rowid, timestamp, entry_text) in enumerate(entries):
-                timestamp_time = re.search(r"\d\d:\d\d", timestamp)
 
-                timestamp_label = ttk.Label(self.entries_frame.view, text=timestamp_time.group(0))
-                timestamp_label.grid(row=row, column=0, sticky="NESW")
-                content_label = ttk.Label(self.entries_frame.view, text=entry_text)
-                content_label.grid(row=row, column=1, sticky="NESW")
-                self.entries_frame.view.rowconfigure(row, weight=1)
+class EntryFrame(ScrollableFrame):
+    """Utility subclass which displays a list of messages alongside their timestamps."""
 
-                self.entry_labels.append((timestamp_label, content_label))
-        else:
-            self.no_entries_label = ttk.Label(self.entries_frame.view, text="No entries yet.").grid(
-                row=0, column=0, sticky="NESW")
+    def __init__(self, master, background=BACKGROUND, entries=None, timestamps=None):
+        super().__init__(master, background)
+        self.timestamps = []
+        self.entries = []
+        self.count_entries = 0
+        self.view.grid_columnconfigure(1, weight=1)
+
+        if entries:
+            if not timestamps:
+                def timestamps():
+                    yield None
+            for entry, timestamp in zip(entries, timestamps):
+                self.add_entry(entry, timestamp)
+
+    def add_entry(self, entry, timestamp):
+        self.count_entries += 1
+        self.view.rowconfigure(self.count_entries, weight=1)
+
+        timestamp_label = ttk.Label(self.view, text=timestamp)
+        timestamp_label.grid(row=self.count_entries, column=0, sticky="NEW")
+        self.timestamps.append(timestamp_label)
+
+        entry_label = ttk.Label(self.view, text=entry)
+        entry_label.grid(row=self.count_entries, column=1, sticky="NESW")
+        self.entries.append(entry_label)
 
     def update(self):
-        if self.entry_labels:
-            bbox = self.root.bbox(self.entry_labels[0][0])
-            width = max(bbox[2] - WRAPPING_STATIC_GAP - TIMESTAMP_WIDTH, 0)
-            for label_t, label_c in self.entry_labels:
+        if self.entries:
+            bbox = self.master.bbox(self.entries[0])
+            width = max(bbox[2] - SCROLLBAR_WIDTH - TIMESTAMP_WIDTH, 0)
+            for label_c in self.entries:
                 label_c.configure(wraplength=width)
+
+
+class PreviousWindow(Frame):
+    """Open a window for searching, reviewing and/or editing previous entries.
+
+    The main window lists all messages with the most recent first."""
+
+    def __init__(self, master):
+        super().__init__(master)
+        self.master = master
+        self.root = Toplevel(master)
+
+        self.sidebar = Frame(self.root)
+        self.sidebar.grid(row=0, column=0, sticky="NW")
+
+        def yesterday(*args):
+            """Opens a window of all messages from yesterday.
+            """
+
+        self.sidebar_yesterday = Button(self.sidebar, text="Yesterday", command=yesterday)
+
+        self.entry_frame = ScrollableFrame(self.root)
+        self.entry_frame.grid(row=0, column=1, sticky="NESW")
+
+    def refresh(self):
+        pass
+
+    def update(self):
+        pass
 
 
 class TodoManager:
@@ -172,7 +214,7 @@ class TodoManager:
     def update(self):
         if self.todo_list_labels:
             bbox = self.root.bbox(self.todo_list_labels[0])
-            width = max(bbox[2] - WRAPPING_STATIC_GAP - DELETE_BUTTON_WIDTH, 0)
+            width = max(bbox[2] - SCROLLBAR_WIDTH - DELETE_BUTTON_WIDTH, 0)
             for label in self.todo_list_labels:
                 label.configure(wraplength=width)
 

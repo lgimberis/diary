@@ -100,10 +100,15 @@ class Diary:
 
     def get_today(self):
         """Return existing entries for today's diary."""
-        if not self.cur:
-            raise Exception('self.cur not set in get_today')
-        date = self.get_timestamp().split(' ')[0]
+        return self.get_days_ago(0)
+
+    def get_days_ago(self, days=0):
+        """Return entries from the date 'days' days ago.
+        """
+        if self.cur:
+            date = (datetime.datetime.now() - datetime.timedelta(days=days)).isoformat(sep=' ').split(' ')[0]
         return self.cur.execute(f'''SELECT rowid, timestamp, entry FROM entries WHERE timestamp LIKE "{date}%"''')
+
 
     def get_categories(self):
         if self.cur:
@@ -128,6 +133,8 @@ class Diary:
 
         self.con.commit()
 
+        return timestamp
+
     def edit_today(self):
         pass
 
@@ -135,6 +142,10 @@ class Diary:
     def get_timestamp() -> str:
         """Return a string representing a date in the format YYYY-MM-DD HH:MM:SS.UUUUUU"""
         return datetime.datetime.now().isoformat(sep=' ')
+
+    @staticmethod
+    def get_time_of_day() -> str:
+        return datetime.datetime.now().strftime("%H:%M")
 
     def add_todo_list_item(self, text):
         self.cur.execute(f'INSERT INTO todo VALUES ("{self.get_timestamp()}", "{text}")')
