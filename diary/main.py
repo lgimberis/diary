@@ -279,9 +279,11 @@ class TodoManager:
         entry_field.grid(row=1, column=0, columnspan=2)
 
         def add(*args):
-            self.diary.add_todo_list_item(entry_field.get("1.0", "end-1c").strip())
-            entry.destroy()
-            self.refresh()
+            text = entry_field.get("1.0", "end-1c").strip()
+            if len(text) > 0:
+                self.diary.add_todo_list_item(text)
+                entry.destroy()
+                self.refresh()
 
         def cancel(*args):
             entry.destroy()
