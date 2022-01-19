@@ -1,5 +1,0 @@
-[Purpose]
-Multiple Key Test
-
-[Flavour]
-Strawberries

@@ -1,7 +1,0 @@
-[Purpose]
-(Dummy Category)
-Multiple Keys With Categories Test
-
-[Second Key]
-(Second Category)
-Second Text
