@@ -107,7 +107,18 @@ class Diary:
         """
         if self.cur:
             date = (datetime.datetime.now() - datetime.timedelta(days=days)).isoformat(sep=' ').split(' ')[0]
-        return self.cur.execute(f'''SELECT rowid, timestamp, entry FROM entries WHERE timestamp LIKE "{date}%"''')
+            return self.cur.execute(f'''SELECT rowid, timestamp, entry FROM entries WHERE timestamp LIKE "{date}%"''')
+
+    def get_since_days_ago(self, days=0):
+        """Return all entries since 12:00am (00:00 in 24h) of the day 'days' days ago.
+        """
+        if self.cur:
+            date = datetime.datetime.now()
+            date_since = date - datetime.timedelta(days=days)
+            day_today = date.isoformat(sep=' ')
+            day_since = date_since.isoformat(sep=' ').split(' ')[0]
+            return self.cur.execute(f'''SELECT rowid, timestamp, entry FROM entries '''
+                                    f'''WHERE timestamp BETWEEN "{day_since}" AND "{day_today}"''')
 
 
     def get_categories(self):

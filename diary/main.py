@@ -1,5 +1,7 @@
+import datetime
 from pathlib import Path
-import re, sys
+import re
+import sys
 import time
 from tkinter import *
 from tkinter import ttk
@@ -26,16 +28,27 @@ def wrap_labels(master, labels):
     return f
 
 
-class TodayWindow(Frame):
-    def __bool__(self):
-        return bool(self.root.winfo_exists())
-
-    def __init__(self, master, background=BACKGROUND):
+class GenericWindow:
+    def __init__(self, master):
         self.master = master
         self.root = Toplevel(master)
         self.root.grid_rowconfigure(0, weight=1)
         self.root.grid_columnconfigure(1, weight=1)
 
+        self.update_list = []
+
+    def __bool__(self):
+        return bool(self.root.winfo_exists())
+
+    def update(self):
+        for item in self.update_list:
+            if item:
+                item.update()
+
+
+class TodayWindow(GenericWindow):
+    def __init__(self, master, background=BACKGROUND):
+        super().__init__(master)
         self.entry_labels = []
         self.no_entries_label = None
 
@@ -43,6 +56,7 @@ class TodayWindow(Frame):
         self.entries_frame = EntryFrame(self.root, background=background)
         self.entries_frame.grid(row=0, column=0, columnspan=4, sticky="NESW")
         self.entries_frame.grid_columnconfigure(0, weight=1)
+        self.update_list.append(self.entries_frame)
 
         # Add a text entry box
         self.entry_field = ScrolledText(self.root, height=5, wrap=WORD)
@@ -92,9 +106,6 @@ class TodayWindow(Frame):
         categories = [row[1] for row in self.master.get_diary().get_categories()]
         self.category_combobox["values"] = categories
 
-    def update(self):
-        self.entries_frame.update()
-
 
 class EntryFrame(ScrollableFrame):
     """Utility subclass which displays a list of messages alongside their timestamps."""
@@ -126,40 +137,83 @@ class EntryFrame(ScrollableFrame):
         self.entries.append(entry_label)
 
     def update(self):
-        if self.entries:
+        if self.master.winfo_exists() and self.entries:
             bbox = self.master.bbox(self.entries[0])
             width = max(bbox[2] - SCROLLBAR_WIDTH - TIMESTAMP_WIDTH, 0)
             for label_c in self.entries:
                 label_c.configure(wraplength=width)
 
 
-class PreviousWindow(Frame):
+class PreviousWindow(GenericWindow):
     """Open a window for searching, reviewing and/or editing previous entries.
 
     The main window lists all messages with the most recent first."""
 
     def __init__(self, master):
         super().__init__(master)
-        self.master = master
-        self.root = Toplevel(master)
+        self.diary = self.master.get_diary()
 
         self.sidebar = Frame(self.root)
         self.sidebar.grid(row=0, column=0, sticky="NW")
 
+        self.yesterday_window = None
+        self.yesterday_entry_frame = None
+
         def yesterday(*args):
             """Opens a window of all messages from yesterday.
             """
+            self.yesterday_window = Toplevel(self.master)
+            self.yesterday_window.grid_columnconfigure(0, weight=1)
+            self.yesterday_window.grid_rowconfigure(0, weight=1)
+
+            entries = self.diary.get_days_ago(1)
+            self.yesterday_entry_frame = EntryFrame(self.yesterday_window)
+            self.yesterday_entry_frame.grid(row=0, column=0, sticky="NESW")
+            self.update_list.append(self.yesterday_entry_frame)
+            for rowid, timestamp, entry in entries:
+                self.yesterday_entry_frame.add_entry(entry, timestamp)
+
+            def close(*args):
+                self.yesterday_window.destroy()
+                self.yesterday_window = None
+
+            close_button = ttk.Button(self.yesterday_window, text="Close", command=close)
+            close_button.grid(row=1, column=0, sticky="E")
 
         self.sidebar_yesterday = Button(self.sidebar, text="Yesterday", command=yesterday)
+        self.sidebar_yesterday.grid(row=0, column=0)
 
-        self.entry_frame = ScrollableFrame(self.root)
+        self.entry_frame = EntryFrame(self.root)
         self.entry_frame.grid(row=0, column=1, sticky="NESW")
+        self.update_list.append(self.entry_frame)
+        entries = self.diary.get_since_days_ago(7)
+
+        time_now = datetime.datetime.now()
+        weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        def format_timestamp(t):
+            """Convert the ISO format timestamp to one that indicates day and time.
+            """
+            _timestamp = ""
+            dt = datetime.datetime.fromisoformat(t)
+            if dt.day == time_now.day:
+                _timestamp = "Today "
+            elif dt.day + 1 == time_now.day:
+                _timestamp = "Yesterday "
+            else:
+                _timestamp = f"{weekdays[dt.weekday()]} "
+
+            _timestamp += f"{dt.strftime('%H:%M')}"
+            return _timestamp
+
+        for rowid, timestamp, entry in entries:
+            self.entry_frame.add_entry(entry, format_timestamp(timestamp))
 
     def refresh(self):
         pass
-
-    def update(self):
-        pass
+    #
+    # def update(self):
+    #     if self.yesterday_window:
+    #         self.yesterday_entry_frame.update()
 
 
 class TodoManager:
@@ -274,7 +328,7 @@ class DiaryProgram(Frame):
         # Create buttons for the sidebar
         sidebar_today = Button(sidebar, text="Today's entry", command=self.today)
         sidebar_today.grid(row=0, sticky=(W, E))
-        sidebar_search = Button(sidebar, text="Search previous entries", command=self.search)
+        sidebar_search = Button(sidebar, text="Previous entries", command=self.previous)
         sidebar_search.grid(row=1, sticky=(W, E))
         sidebar_calendar = Button(sidebar, text="Calendar", command=self.add_calendar_item)
         sidebar_calendar.grid(row=2, sticky=(W, E))
@@ -285,6 +339,7 @@ class DiaryProgram(Frame):
         self.todo_list = TodoManager(self, self.diary, self.red_cross)
 
         self.today_window = None
+        self.previous_window = None
 
         self.grid_columnconfigure(1, weight=3)
 
@@ -309,6 +364,8 @@ class DiaryProgram(Frame):
             self.todo_list.update()
         if self.today_window:
             self.today_window.update()
+        if self.previous_window:
+            self.previous_window.update()
 
     def today(self):
         """Open up a dialog box for interacting with today's entry.
@@ -318,10 +375,10 @@ class DiaryProgram(Frame):
     def get_diary(self):
         return self.diary
 
-    def search(self):
+    def previous(self):
         """Open up a dialog box for searching through previous entries.
         """
-        pass
+        self.previous_window = PreviousWindow(self)
 
     def settings(self):
         """Open the settings dialog box.
