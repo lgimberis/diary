@@ -265,8 +265,8 @@ class Diary:
         if text:
             if need_and:
                 full_statement += " AND "
-            text_condition = 'entry LIKE "%:text%"'
-            values["text"] = text
+            text_condition = 'entry LIKE :text'
+            values["text"] = f"%{text}%"
             full_statement += text_condition
 
         full_statement += f" LIMIT {Diary.LIMIT_SEARCH_ROWS}"
