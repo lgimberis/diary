@@ -111,7 +111,7 @@ class TodayWindow(GenericWindow):
         self.no_entries_label = None
 
         # Instantiate entries
-        self.entries_frame = EntryFrame(self.root, background=background)
+        self.entries_frame = EntryFrame(self.root, background=background, timestamp_format="%H:%M")
         self.entries_frame.grid(row=0, column=0, columnspan=4, sticky="NESW")
         self.entries_frame.grid_columnconfigure(0, weight=1)
         self.update_list.append(self.entries_frame)
@@ -136,7 +136,7 @@ class TodayWindow(GenericWindow):
             message = self.entry_field.get("1.0", "end-1c").strip()
             if len(message) > 0:
                 self.master.get_diary().add_entry(message, category.get())
-                _timestamp = self.master.get_diary().get_time_of_day()
+                _timestamp = self.master.get_diary().get_timestamp()
                 self.entries_frame.add_entry(message, _timestamp.split(' ')[0])
                 self.entry_field.delete("1.0", "end-1c")
                 self.refresh()
@@ -155,8 +155,7 @@ class TodayWindow(GenericWindow):
 
         if entries := self.master.get_diary().get_today():
             for row, (rowid, timestamp, entry_text) in enumerate(entries):
-                timestamp_time = re.search(r"\d\d:\d\d", timestamp)
-                self.entries_frame.add_entry(entry_text, timestamp_time.group(0))
+                self.entries_frame.add_entry(entry_text, timestamp)
         self.refresh()
 
     def refresh(self):
@@ -168,19 +167,17 @@ class TodayWindow(GenericWindow):
 class EntryFrame(ScrollableFrame):
     """Utility subclass which displays a list of messages alongside their timestamps."""
 
-    def __init__(self, master, background=BACKGROUND, entries=None, timestamps=None):
+    WEEKDAY_CODE_RELATIVE = "RELATIVE_WEEKDAY"
+    WEEKDAY_CODE = "WEEKDAY"
+
+    def __init__(self, master, background=BACKGROUND, timestamp_format=f"{WEEKDAY_CODE_RELATIVE} %H:%M"):
         super().__init__(master, background)
+        self.timestamp_format = timestamp_format
+
         self.timestamps = []
         self.entries = []
         self.count_entries = 0
         self.view.grid_columnconfigure(1, weight=1)
-
-        if entries:
-            if not timestamps:
-                def timestamps():
-                    yield None
-            for entry, timestamp in zip(entries, timestamps):
-                self.add_entry(entry, timestamp)
 
     def clear(self):
         for timestamp, entry in zip(self.timestamps, self.entries):
@@ -190,9 +187,18 @@ class EntryFrame(ScrollableFrame):
         self.entries = []
         self.count_entries = 0
 
-    def add_entry(self, entry, timestamp):
+    def add_entry(self, entry, iso_timestamp):
         self.count_entries += 1
         self.view.rowconfigure(self.count_entries, weight=1)
+
+        time = datetime.datetime.fromisoformat(iso_timestamp)
+        if self.WEEKDAY_CODE_RELATIVE in self.timestamp_format:
+            timestamp_format = self.timestamp_format.replace(self.WEEKDAY_CODE_RELATIVE, iso_to_weekday(iso_timestamp, relative=True))
+        elif self.WEEKDAY_CODE in self.timestamp_format:
+            timestamp_format = self.timestamp_format.replace(self.WEEKDAY_CODE, iso_to_weekday(iso_timestamp, relative=False))
+        else:
+            timestamp_format = self.timestamp_format
+        timestamp = time.strftime(timestamp_format)
 
         timestamp_label = ttk.Label(self.view, text=timestamp)
         timestamp_label.grid(row=self.count_entries, column=0, sticky="NEW")
@@ -229,8 +235,7 @@ class PreviousWindow(GenericWindow):
             def f(*args):
                 self.entry_frame.clear()
                 for rowid, timestamp, entry in self.diary.get_days_ago(days_ago):
-                    timestamp_formatted = datetime.datetime.fromisoformat(timestamp).strftime("%H:%M")
-                    self.entry_frame.add_entry(entry, timestamp_formatted)
+                    self.entry_frame.add_entry(entry, timestamp)
             return f
 
         def seven_days(*args):
@@ -238,7 +243,7 @@ class PreviousWindow(GenericWindow):
             for rowid, timestamp, entry in self.diary.get_since_days_ago(7):
                 weekday = iso_to_weekday(timestamp)
                 timestamp_formatted = (datetime.datetime.fromisoformat(timestamp)).strftime("%H:%M")
-                self.entry_frame.add_entry(entry, f"{weekday} {timestamp_formatted}")
+                self.entry_frame.add_entry(entry, timestamp)
 
         self.sidebar_today = ttk.Button(self.sidebar, text="Today", command=today_or_yesterday(0))
         self.sidebar_today.grid(row=0, column=0)
