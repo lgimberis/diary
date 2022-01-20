@@ -1,6 +1,5 @@
 import datetime
 from pathlib import Path
-import re
 import sys
 import time
 from tkinter import *
@@ -24,8 +23,9 @@ WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", 
 def iso_to_weekday(iso_timestamp: str, relative=True) -> str:
     """Extract the weekday from a given ISO timestamp.
 
-    If relative is True, it will return 'Today' or 'Yesterday' if that is what iso_timestamp corresponds to.
+    If relative is True, it may instead return either 'Today' or 'Yesterday' if appropriate.
     """
+
     target_date = datetime.datetime.fromisoformat(iso_timestamp).date()
 
     if relative:
@@ -39,10 +39,13 @@ def iso_to_weekday(iso_timestamp: str, relative=True) -> str:
 
 
 class DateTimeSelectorWindow:
-    def __init__(self, master, entryvar, default_time="00:00"):
+    """Open a window to encourage the user to select a date and time.
+    """
+
+    def __init__(self, master, var, default_time="00:00"):
+
         self.root = Toplevel(master)
-        self.entryvar = entryvar
-        self.timestamp = ""
+        self.var = var
 
         today = datetime.datetime.now()
 
@@ -66,8 +69,7 @@ class DateTimeSelectorWindow:
             month, day, year = calendar.get_date().split("/")  # (D)M/(D)D/YY, no zero-padding
             year = int(year)+2000  # I know, I know. It is what it is.
             iso_date = f"{year}-{int(month):02}-{int(day):02}"
-            self.timestamp = f"{iso_date} {time_of_day_var.get().strip()}"
-            self.entryvar.set(self.timestamp)
+            self.var.set(f"{iso_date} {time_of_day_var.get().strip()}")
             self.root.destroy()
 
         def cancel(*_args):
@@ -78,9 +80,6 @@ class DateTimeSelectorWindow:
 
         cancel_button = ttk.Button(self.root, text="Cancel", command=cancel)
         cancel_button.grid(row=2, column=1, sticky="E")
-
-    def get_selection(self):
-        return self.timestamp
 
     def __bool__(self):
         return self.root.winfo_exists() if self.root else False
@@ -222,6 +221,7 @@ class PreviousWindow(GenericWindow):
 
     def __init__(self, master):
         super().__init__(master)
+        self.root.title("Previous Entries")
         self.diary = self.master.get_diary()
 
         self.sidebar = Frame(self.root)
@@ -440,7 +440,6 @@ class DiaryProgram(Frame):
             root_directory = Path().absolute()
 
         self.diary = Diary(root_directory)
-        self.diary.__enter__()
 
         # Create a small sidebar containing a column of buttons
         sidebar = Frame(self)
@@ -527,6 +526,7 @@ def main():
     except TclError as e:
         # Expected normal close of the program
         pass
+    program.diary.close()
 
 
 if __name__ == "__main__":

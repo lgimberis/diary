@@ -5,12 +5,9 @@ import sqlite3
 
 
 class Diary:
-    """Diary database management class. Operates based on a root directory.
+    """Diary database management class.
 
-    Exposes the following functions:
-    today - Return today's diary entry
-    get_entry - Get the entry corresponding to a particular date
-    get_file - Get any file with the given prefix (discard extension)
+    This utility class provides an abstraction of all Diary-related data on disk, primarily the SQL database.
     """
 
     # CONFIG_FILE_NAME = "config.cfg"  # TODO add settings. Don't need any yet
@@ -47,6 +44,52 @@ class Diary:
             return filename_now
         self.log_file = Path(self.log_directory, log_filename()+self.LOG_EXTENSION)
 
+        # -- Historical __init__ / __enter__ separation
+
+        # Create the root directory
+        if not self.root.is_dir():
+            self.root.mkdir(parents=True)
+
+        # Create the log directory
+        if not self.log_directory.is_dir():
+            # Create regardless of settings
+            self.log_directory.mkdir()
+
+        # Set up the logger
+        # Following comment suppresses erroneous problem reported due to incomplete logging.basicConfig spec
+        # noinspection PyArgumentList
+        logging.basicConfig(
+            filename=str(self.log_file),
+            format='[%(asctime)s.%(msecs)03d] %(levelname)s:%(message)s',
+            datefmt='%Y/%m/%d %H:%M:%S',
+            encoding='utf-8',
+            level=self.logging_level
+        )
+        logging.info("Logging initialised")
+        # TODO better management of log files
+
+        # Connect to the database file
+        self.con = sqlite3.connect(self.database_file)
+        self.con.execute('PRAGMA foreign_keys = on')
+        self.cur = self.con.cursor()
+        if self.new_database:
+            # Create new database
+            self.create_new_diary()
+        else:
+            # Open existing database - need to check everything is as expected
+            # TODO
+            pass
+
+        # # Create the config file if it doesn't exist.
+        # if not self.config.file_exists():
+        #     logging.info("Creating config file")
+        #     self.config.create_config_file()
+        #
+        #     # Reminder about how to change the config file
+        #     print(f"Config file can be modified at any time on disk "
+        #           f"(at {str(self.config.path)})"
+        #           f"or via the 'c' or 'config' commands.")
+
     def create_new_diary(self):
         # Add categories
         self.cur.execute('''CREATE TABLE categories (categoryid INTEGER PRIMARY KEY, category TEXT);''')
@@ -82,7 +125,10 @@ class Diary:
         self.con.commit()
 
     def get_todo_list(self) -> sqlite3.Cursor:
-        """Returns a list of strings corresponding to 'to-do' items."""
+        """Obtain all to-do items.
+
+        Returns a
+        """
         if not self.cur:
             raise Exception('self.cur not set in get_todo_list')
         return self.cur.execute('''SELECT rowid, * FROM todo''')
@@ -147,6 +193,10 @@ class Diary:
         return timestamp
 
     def entry_search(self, start_time="", end_time="", category="", text=""):
+        """Obtain a subset of entries, filtered by at least a start/end time, category, or text contents.
+
+
+        """
 
         # Make sure we're filtering on at least one item
         if not (start_time.strip() or end_time.strip() or category.strip() or text.strip()):
@@ -187,79 +237,18 @@ class Diary:
             statement += text_condition
 
         statement += f" LIMIT {Diary.LIMIT_SEARCH_ROWS}"
-        print(statement)
         return self.cur.execute(statement)
-
-    def edit_today(self):
-        pass
 
     @staticmethod
     def get_timestamp() -> str:
         """Return a string representing a date in the format YYYY-MM-DD HH:MM:SS.UUUUUU"""
         return datetime.datetime.now().isoformat(sep=' ')
 
-    @staticmethod
-    def get_time_of_day() -> str:
-        return datetime.datetime.now().strftime("%H:%M")
-
     def add_todo_list_item(self, text):
         self.cur.execute(f'INSERT INTO todo VALUES ("{self.get_timestamp()}", "{text}")')
         self.con.commit()
 
-    def __enter__(self):
-        """Create or open a diary database under self.root.
-
-        Creates a root directory, log directory, log file, and config file in
-        that order. Log files will probably always be created because filename
-        depends on the time at which this Diary object was created.
-        """
-        # Create the root directory
-        if not self.root.is_dir():
-            self.root.mkdir(parents=True)
-
-        # Create the log directory
-        if not self.log_directory.is_dir():
-            # Create regardless of settings
-            self.log_directory.mkdir()
-
-        # Set up the logger
-        # Following comment suppresses erroneous problem reported due to incomplete logging.basicConfig spec
-        # noinspection PyArgumentList
-        logging.basicConfig(
-            filename=str(self.log_file),
-            format='[%(asctime)s.%(msecs)03d] %(levelname)s:%(message)s',
-            datefmt='%Y/%m/%d %H:%M:%S',
-            encoding='utf-8',
-            level=self.logging_level
-        )
-        logging.info("Logging initialised")
-        # TODO better management of log files
-
-        # Connect to the database file
-        self.con = sqlite3.connect(self.database_file)
-        self.con.execute('PRAGMA foreign_keys = on')
-        self.cur = self.con.cursor()
-        if self.new_database:
-            # Create new database
-            self.create_new_diary()
-        else:
-            # Open existing database - need to check everything is as expected
-            # TODO
-            pass
-
-        # # Create the config file if it doesn't exist.
-        # if not self.config.file_exists():
-        #     logging.info("Creating config file")
-        #     self.config.create_config_file()
-        #
-        #     # Reminder about how to change the config file
-        #     print(f"Config file can be modified at any time on disk "
-        #           f"(at {str(self.config.path)})"
-        #           f"or via the 'c' or 'config' commands.")
-
-        return self
-
-    def __exit__(self, t, v, tb):
+    def close(self):
         """Write to our master diary database file.
 
         """
@@ -269,4 +258,5 @@ class Diary:
 
         # Manage log file
         if not self.keep_logs:
+            logging.shutdown()
             self.log_file.unlink()
