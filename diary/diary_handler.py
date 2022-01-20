@@ -121,7 +121,6 @@ class Diary:
         """
 
         statement = "SELECT rowid, timestamp, description FROM todo"
-        logging.debug(f"Reading from to-do list: {statement}")
         return self.cur.execute(statement)
 
     def todo_list_add(self, text: str) -> None:
@@ -130,7 +129,6 @@ class Diary:
 
         statement = "INSERT INTO todo VALUES (?, ?)"
         values = (self.get_timestamp(), text)
-        logging.debug(f"Adding to to-do list: {statement} - {values}")
 
         self.cur.execute(statement, values)
         self.con.commit()
@@ -141,7 +139,6 @@ class Diary:
 
         statement = "DELETE FROM todo WHERE rowid = ?"
         values = (rowid, )
-        logging.debug(f"Removing from to-do list: {statement} - {values}")
 
         self.cur.execute(statement, values)
         self.con.commit()
@@ -163,8 +160,6 @@ class Diary:
             date += "%"
         statement = f"SELECT rowid, timestamp, entry FROM entries WHERE timestamp {'>=' if since else 'LIKE'} ?"
         values = (date,)
-        logging.debug(f"Getting entry from {days_ago} days ago"
-                      f"{' until now' if since else ''}: {statement} - {values}")
         return self.cur.execute(statement, values)
 
     def get_categories(self) -> sqlite3.Cursor:
@@ -174,7 +169,6 @@ class Diary:
         """
 
         statement = "SELECT categoryid, category FROM categories"
-        logging.debug(f"Getting all categories: {statement}")
         return self.cur.execute(statement)
 
     def get_category_id(self, category: str) -> int:
@@ -185,7 +179,6 @@ class Diary:
 
         statement = "SELECT rowid, * FROM categories WHERE category = ?"
         values = (category,)
-        logging.debug(f"Checking whether the category exists: {statement} - {values}")
 
         category_list = list(self.cur.execute(statement, values))
         try:
@@ -206,18 +199,15 @@ class Diary:
         if not category_rowid:
             statement = "INSERT INTO categories (category) VALUES (?)"
             values = (category,)
-            logging.debug(f"Category {category} was found to not exist, adding it: {statement} - {values}")
 
             self.cur.execute(statement, values)
 
             statement = "SELECT last_insert_rowid()"
-            logging.debug(f"Grabbing rowid of the category we just inserted: {statement}")
             category_list = list(self.cur.execute(statement))
             category_rowid = int(category_list[0][0])  # rowid of first result, or last insert rowid
 
         statement = "INSERT INTO entries (timestamp, entry, categoryid) VALUES (?, ?, ?)"
         values = (timestamp, text, category_rowid)
-        logging.debug(f"Adding entry: {timestamp} - {values}")
         self.cur.execute(statement, values)
         self.con.commit()
 
@@ -250,7 +240,6 @@ class Diary:
             # Get categoryid of category
             category_id_statement = 'SELECT categoryid FROM categories WHERE category = :category'
             values = {"category": category}
-            logging.debug(f"Finding category ID of category: {category_id_statement} - {values}")
             try:
                 categoryid = list(self.cur.execute(category_id_statement, values))[0][0]
                 category_condition = f"categoryid = :categoryid"
@@ -270,7 +259,6 @@ class Diary:
             full_statement += text_condition
 
         full_statement += f" LIMIT {Diary.LIMIT_SEARCH_ROWS}"
-        logging.debug(f"Executing entry search: {full_statement} - {values}")
         return self.cur.execute(full_statement, values)
 
     @staticmethod
