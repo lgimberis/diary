@@ -12,14 +12,14 @@ class Diary:
 
     # CONFIG_FILE_NAME = "config.cfg"  # TODO add settings. Don't need any yet
     DATABASE_FILE_NAME = "diary.db"  # Name of the main database file containing data
-    LOG_EXTENSION = ".log"  # Extension of produced log files
+    LOG_EXTENSION = "log"  # Extension of produced log files
     ENCODING = 'utf-8'
     LIMIT_SEARCH_ROWS = 1000
 
     def __init__(self,
                  root: Path,
                  logging_level=logging.INFO,
-                 keep_logs=False,  # Whether to keep logs after closing even if nothing seems wrong
+                 keep_logs=False,  # Whether to delete 'old' log files in the current log directory
                  ):
         """Initialise structures in preparation of creating or opening a diary database under 'root'.
 
@@ -37,14 +37,16 @@ class Diary:
         # Prepare log file directory and path
         self.log_directory = Path(self.root, "logs")
 
+        if not keep_logs:
+            for old_log_file in self.log_directory.rglob(f"*.{self.LOG_EXTENSION}"):
+                old_log_file.unlink()
+
         def log_filename():
             time_now = datetime.datetime.now()
             formatted_time_now = time_now.isoformat(sep='_', timespec='seconds')
             filename_now = formatted_time_now.replace('-', '').replace(':', '')
             return filename_now
-        self.log_file = Path(self.log_directory, log_filename()+self.LOG_EXTENSION)
-
-        # -- Historical __init__ / __enter__ separation
+        self.log_file = Path(self.log_directory, log_filename()+"."+self.LOG_EXTENSION)
 
         # Create the root directory
         if not self.root.is_dir():
@@ -66,31 +68,21 @@ class Diary:
             level=self.logging_level
         )
         logging.info("Logging initialised")
-        # TODO better management of log files
 
         # Connect to the database file
         self.con = sqlite3.connect(self.database_file)
         self.con.execute('PRAGMA foreign_keys = on')
         self.cur = self.con.cursor()
+
         if self.new_database:
             # Create new database
-            self.create_new_diary()
-        else:
-            # Open existing database - need to check everything is as expected
-            # TODO
-            pass
+            logging.info("Creating new database")
+            self.populate_new_database()
 
-        # # Create the config file if it doesn't exist.
-        # if not self.config.file_exists():
-        #     logging.info("Creating config file")
-        #     self.config.create_config_file()
-        #
-        #     # Reminder about how to change the config file
-        #     print(f"Config file can be modified at any time on disk "
-        #           f"(at {str(self.config.path)})"
-        #           f"or via the 'c' or 'config' commands.")
+    def populate_new_database(self) -> None:
+        """Populate a fresh database with all required tables.
+        """
 
-    def create_new_diary(self):
         # Add categories
         self.cur.execute('''CREATE TABLE categories (categoryid INTEGER PRIMARY KEY, category TEXT);''')
 
@@ -124,139 +116,174 @@ class Diary:
 
         self.con.commit()
 
-    def get_todo_list(self) -> sqlite3.Cursor:
+    def todo_list_get(self) -> sqlite3.Cursor:
         """Obtain all to-do items.
-
-        Returns a
         """
-        if not self.cur:
-            raise Exception('self.cur not set in get_todo_list')
-        return self.cur.execute('''SELECT rowid, * FROM todo''')
 
-    def remove_todo_list_item(self, rowid):
-        if self.cur:
-            self.cur.execute(f"DELETE FROM todo WHERE rowid = {rowid}")
+        statement = "SELECT rowid, timestamp, description FROM todo"
+        logging.debug(f"Reading from to-do list: {statement}")
+        return self.cur.execute(statement)
+
+    def todo_list_add(self, text: str) -> None:
+        """Add a to-do list item consisting of the given text.
+        """
+
+        statement = "INSERT INTO todo VALUES (?, ?)"
+        values = (self.get_timestamp(), text)
+        logging.debug(f"Adding to to-do list: {statement} - {values}")
+
+        self.cur.execute(statement, values)
+        self.con.commit()
+
+    def todo_list_remove(self, rowid: int) -> None:
+        """Remove the to-do list item at rowid 'rowid'.
+        """
+
+        statement = "DELETE FROM todo WHERE rowid = ?"
+        values = (rowid, )
+        logging.debug(f"Removing from to-do list: {statement} - {values}")
+
+        self.cur.execute(statement, values)
         self.con.commit()
 
     def get_calendar_this_week(self) -> sqlite3.Cursor:
         """Returns a list of tuples corresponding to (time, content) of calendar items.
         """
-        if not self.cur:
-            raise Exception('self.cur not set in get_calendar_this_week')
+
         return self.cur.execute('''SELECT * from calendar''')
 
-    def get_today(self):
-        """Return existing entries for today's diary."""
-        return self.get_days_ago(0)
+    def get_day(self, days_ago=0, since=False) -> sqlite3.Cursor:
+        """Return entries from the date 'days_ago' days ago.
 
-    def get_days_ago(self, days=0):
-        """Return entries from the date 'days' days ago.
+        If 'since' is True, also return all entries since this date.
         """
-        if self.cur:
-            date = (datetime.datetime.now() - datetime.timedelta(days=days)).isoformat(sep=' ').split(' ')[0]
-            return self.cur.execute(f'''SELECT rowid, timestamp, entry FROM entries WHERE timestamp LIKE "{date}%"''')
 
-    def get_since_days_ago(self, days=0):
-        """Return all entries since 12:00am (00:00 in 24h) of the day 'days' days ago.
+        date = (datetime.datetime.now().date() - datetime.timedelta(days=days_ago)).isoformat()
+        if not since:
+            date += "%"
+        statement = f"SELECT rowid, timestamp, entry FROM entries WHERE timestamp {'>=' if since else 'LIKE'} ?"
+        values = (date,)
+        logging.debug(f"Getting entry from {days_ago} days ago"
+                      f"{' until now' if since else ''}: {statement} - {values}")
+        return self.cur.execute(statement, values)
+
+    def get_categories(self) -> sqlite3.Cursor:
+        """Get all categories.
+
+        Returns a Cursor iterator that yields (categoryid:int, category:str) tuples
         """
-        if self.cur:
-            date = datetime.datetime.now()
-            date_since = date - datetime.timedelta(days=days)
-            day_today = date.isoformat(sep=' ')
-            day_since = date_since.isoformat(sep=' ').split(' ')[0]
-            return self.cur.execute(f'''SELECT rowid, timestamp, entry FROM entries '''
-                                    f'''WHERE timestamp BETWEEN "{day_since}" AND "{day_today}"''')
 
-    def get_categories(self):
-        if self.cur:
-            return self.cur.execute(f'''SELECT categoryid, category FROM categories''')
+        statement = "SELECT categoryid, category FROM categories"
+        logging.debug(f"Getting all categories: {statement}")
+        return self.cur.execute(statement)
 
-    def add_entry(self, text, category, timestamp=None):
-        """Add a new entry to the entries database
+    def get_category_id(self, category: str) -> int:
+        """Check whether category 'category' is in the table 'categories', and return its rowid if it is.
 
-        Also adds any nonexistent categories to the categories database."""
+        Returns 0 if the category does not exist.
+        """
+
+        statement = "SELECT rowid, * FROM categories WHERE category = ?"
+        values = (category,)
+        logging.debug(f"Checking whether the category exists: {statement} - {values}")
+
+        category_list = list(self.cur.execute(statement, values))
+        try:
+            category_rowid = int(category_list[0][0])  # rowid of first result, or last insert rowid
+            return category_rowid
+        except IndexError:
+            return 0  # SQLite rowid starts from 1 -> we can safely use 0 to indicate 'no such row'
+
+    def add_entry(self, text: str, category: str, timestamp="") -> None:
+        """Add a new entry to the entries table.
+
+        If the category does not exist, it will be added."""
 
         if not timestamp:
             timestamp = self.get_timestamp()
 
-        if self.cur:
-            category_list = list(self.cur.execute(f'''SELECT rowid, * FROM categories WHERE category = "{category}"'''))
-            if not category_list:
-                self.cur.execute(f'''INSERT INTO categories (category) VALUES ("{category}")''')
-                category_list = list(self.cur.execute(f'''SELECT last_insert_rowid()'''))
+        category_rowid = self.get_category_id(category)
+        if not category_rowid:
+            statement = "INSERT INTO categories (category) VALUES (?)"
+            values = (category,)
+            logging.debug(f"Category {category} was found to not exist, adding it: {statement} - {values}")
+
+            self.cur.execute(statement, values)
+
+            statement = "SELECT last_insert_rowid()"
+            logging.debug(f"Grabbing rowid of the category we just inserted: {statement}")
+            category_list = list(self.cur.execute(statement))
             category_rowid = int(category_list[0][0])  # rowid of first result, or last insert rowid
 
-            self.cur.execute(f'''INSERT INTO entries (timestamp, entry, categoryid) VALUES ("{timestamp}", "{text}", {category_rowid})''')
-
+        statement = "INSERT INTO entries (timestamp, entry, categoryid) VALUES (?, ?, ?)"
+        values = (timestamp, text, category_rowid)
+        logging.debug(f"Adding entry: {timestamp} - {values}")
+        self.cur.execute(statement, values)
         self.con.commit()
 
-        return timestamp
-
-    def entry_search(self, start_time="", end_time="", category="", text=""):
+    def entry_search(self, start_time="", end_time="", category="", text="") -> sqlite3.Cursor:
         """Obtain a subset of entries, filtered by at least a start/end time, category, or text contents.
-
 
         """
 
-        # Make sure we're filtering on at least one item
-        if not (start_time.strip() or end_time.strip() or category.strip() or text.strip()):
-            return [[]]
-
         # Build the statement
-        statement = f"""SELECT rowid, timestamp, entry FROM entries WHERE """
+        full_statement = f"""SELECT rowid, timestamp, entry FROM entries WHERE """
+        values = {}
         need_and = False
 
         # Start / end time component
         if start_time or end_time:
             if start_time and end_time:
-                time_condition = f'timestamp BETWEEN "{start_time}" AND "{end_time}"'
+                time_condition = f'timestamp BETWEEN ":start_time" AND ":end_time"'
+                values["start_time"] = start_time
+                values["end_time"] = end_time
             elif start_time:
-                time_condition = f'timestamp >= "{start_time}"'
+                time_condition = f'timestamp >= ":start_time"'
+                values["start_time"] = start_time
             else:
-                time_condition = f'timestamp <= "{end_time}"'
-            statement += time_condition
+                time_condition = f'timestamp <= ":end_time"'
+                values["end_time"] = end_time
+            full_statement += time_condition
             need_and = True
 
-        category = category.strip()
-        if category and category != "Any":
+        if category:
             # Get categoryid of category
-            categoryid = list(self.cur.execute(f'SELECT categoryid FROM categories WHERE category = "{category}"'))[0][0]
-
-            if categoryid >= 0:
-                category_condition = f"categoryid = {categoryid}"
+            category_id_statement = 'SELECT categoryid FROM categories WHERE category = :category'
+            values = {"category": category}
+            logging.debug(f"Finding category ID of category: {category_id_statement} - {values}")
+            try:
+                categoryid = list(self.cur.execute(category_id_statement, values))[0][0]
+                category_condition = f"categoryid = :categoryid"
+                values["categoryid"] = categoryid
                 if need_and:
-                    statement += " AND "
-                statement += category_condition
+                    full_statement += " AND "
+                full_statement += category_condition
                 need_and = True
+            except IndexError:
+                logging.error(f"entry_search called with non-null invalid category {category}, this should be caught sooner")
 
-        text = text.strip()
         if text:
             if need_and:
-                statement += " AND "
-            text_condition = f'''entry LIKE "%{text}%"'''
-            statement += text_condition
+                full_statement += " AND "
+            text_condition = 'entry LIKE "%:text%"'
+            values["text"] = text
+            full_statement += text_condition
 
-        statement += f" LIMIT {Diary.LIMIT_SEARCH_ROWS}"
-        return self.cur.execute(statement)
+        full_statement += f" LIMIT {Diary.LIMIT_SEARCH_ROWS}"
+        logging.debug(f"Executing entry search: {full_statement} - {values}")
+        return self.cur.execute(full_statement, values)
 
     @staticmethod
     def get_timestamp() -> str:
-        """Return a string representing a date in the format YYYY-MM-DD HH:MM:SS.UUUUUU"""
+        """Return a string representing a date in the ISO format YYYY-MM-DD HH:MM:SS.UUUUUU.
+        """
+
         return datetime.datetime.now().isoformat(sep=' ')
 
-    def add_todo_list_item(self, text):
-        self.cur.execute(f'INSERT INTO todo VALUES ("{self.get_timestamp()}", "{text}")')
-        self.con.commit()
-
-    def close(self):
-        """Write to our master diary database file.
-
+    def close(self) -> None:
+        """Perform any relevant teardown operations.
         """
+
         # Save and close database
         self.con.commit()
         self.con.close()
-
-        # Manage log file
-        if not self.keep_logs:
-            logging.shutdown()
-            self.log_file.unlink()
