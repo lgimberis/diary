@@ -17,6 +17,7 @@ class Diary:
     DATABASE_FILE_NAME = "diary.db"  # Name of the main database file containing data
     LOG_EXTENSION = ".log"  # Extension of produced log files
     ENCODING = 'utf-8'
+    LIMIT_SEARCH_ROWS = 1000
 
     def __init__(self,
                  root: Path,
@@ -120,7 +121,6 @@ class Diary:
             return self.cur.execute(f'''SELECT rowid, timestamp, entry FROM entries '''
                                     f'''WHERE timestamp BETWEEN "{day_since}" AND "{day_today}"''')
 
-
     def get_categories(self):
         if self.cur:
             return self.cur.execute(f'''SELECT categoryid, category FROM categories''')
@@ -145,6 +145,50 @@ class Diary:
         self.con.commit()
 
         return timestamp
+
+    def entry_search(self, start_time="", end_time="", category="", text=""):
+
+        # Make sure we're filtering on at least one item
+        if not (start_time.strip() or end_time.strip() or category.strip() or text.strip()):
+            return [[]]
+
+        # Build the statement
+        statement = f"""SELECT rowid, timestamp, entry FROM entries WHERE """
+        need_and = False
+
+        # Start / end time component
+        if start_time or end_time:
+            if start_time and end_time:
+                time_condition = f'timestamp BETWEEN "{start_time}" AND "{end_time}"'
+            elif start_time:
+                time_condition = f'timestamp >= "{start_time}"'
+            else:
+                time_condition = f'timestamp <= "{end_time}"'
+            statement += time_condition
+            need_and = True
+
+        category = category.strip()
+        if category and category != "Any":
+            # Get categoryid of category
+            categoryid = list(self.cur.execute(f'SELECT categoryid FROM categories WHERE category = "{category}"'))[0][0]
+
+            if categoryid >= 0:
+                category_condition = f"categoryid = {categoryid}"
+                if need_and:
+                    statement += " AND "
+                statement += category_condition
+                need_and = True
+
+        text = text.strip()
+        if text:
+            if need_and:
+                statement += " AND "
+            text_condition = f'''entry LIKE "%{text}%"'''
+            statement += text_condition
+
+        statement += f" LIMIT {Diary.LIMIT_SEARCH_ROWS}"
+        print(statement)
+        return self.cur.execute(statement)
 
     def edit_today(self):
         pass

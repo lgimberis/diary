@@ -39,7 +39,7 @@ def iso_to_weekday(iso_timestamp: str, relative=True) -> str:
 
 
 class DateTimeSelectorWindow:
-    def __init__(self, master, entryvar):
+    def __init__(self, master, entryvar, default_time="00:00"):
         self.root = Toplevel(master)
         self.entryvar = entryvar
         self.timestamp = ""
@@ -58,7 +58,7 @@ class DateTimeSelectorWindow:
         time_of_day_label.grid(row=1, column=0, sticky="NESW")
 
         time_of_day_var = StringVar()
-        time_of_day_var.set("00:00")
+        time_of_day_var.set(default_time)
         time_of_day = ttk.Entry(time_of_day_frame, textvariable=time_of_day_var)
         time_of_day.grid(row=1, column=1, sticky="NESW")
 
@@ -251,6 +251,7 @@ class PreviousWindow(GenericWindow):
 
         def search(*args):
             root = Toplevel(self.master)
+            root.title("Search Previous Entries")
 
             # Add a box to filter by time
             time_label = ttk.Label(root, text="Filter by time:")
@@ -258,42 +259,67 @@ class PreviousWindow(GenericWindow):
 
             start_time = StringVar()
             time_start_entry = ttk.Entry(root, textvariable=start_time)
-            time_start_entry.grid(row=1, column=0, sticky="NESW")
+            time_start_entry.grid(row=1, column=1, sticky="NESW")
 
             end_time = StringVar()
             time_end_entry = ttk.Entry(root, textvariable=end_time)
-            time_end_entry.grid(row=2, column=0, sticky="NESW")
+            time_end_entry.grid(row=2, column=1, sticky="NESW")
 
             def get_start_time(*_args):
                 self.search_start_time = DateTimeSelectorWindow(root, start_time)
 
             def get_end_time(*_args):
-                self.search_end_time = DateTimeSelectorWindow(root, end_time)
+                self.search_end_time = DateTimeSelectorWindow(root, end_time, default_time="23:59")
 
-            time_start_calendar_button = ttk.Button(root, text="Select start date", command=get_start_time)
-            time_start_calendar_button.grid(row=1, column=1)
+            time_start_calendar_button = ttk.Button(root, text="Select earliest date", command=get_start_time)
+            time_start_calendar_button.grid(row=1, column=0)
 
-            time_end_calendar_button = ttk.Button(root, text="Select end date", command=get_end_time)
-            time_end_calendar_button.grid(row=2, column=1)
-
+            time_end_calendar_button = ttk.Button(root, text="Select latest date", command=get_end_time)
+            time_end_calendar_button.grid(row=2, column=0)
 
             # Add a box to filter by category
+            category_label = ttk.Label(root, text="Category: ")
+            category_label.grid(row=3, column=0)
+
+            categories = ["Any"]
+            for row in self.master.get_diary().get_categories():
+                categories.append(row[1])
+            if DEFAULT_CATEGORY not in categories:
+                categories.append(DEFAULT_CATEGORY)
+            category = StringVar()
+            category.set("Any")
+            category_combobox = ttk.Combobox(root, textvariable=category, values=categories)
+            category_combobox.grid(row=3, column=1, sticky="NESW")
 
             # Add a box to filter by text
+            text_filter_label = ttk.Label(root, text="Contains text: ")
+            text_filter_label.grid(row=4, column=0)
 
-            def run(*args):
-                # Perform the search
+            text_filter_var = StringVar()
+            text_filter_entry = ttk.Entry(root, textvariable=text_filter_var)
+            text_filter_entry.grid(row=4, column=1, sticky="NESW")
+
+            def run(*_args):
                 # Update the entry frame with results
+                if entries := list(self.diary.entry_search(start_time.get().strip(), end_time.get().strip(), category.get().strip(), text_filter_var.get().strip())):
+                    self.entry_frame.clear()
+                    for rowid, timestamp, entry in entries:
+                        self.entry_frame.add_entry(entry, timestamp)
+
+                # Destroy search window
                 root.destroy()
 
             # Add buttons
             search_button = ttk.Button(root, text="Search", command=run)
             search_button.grid(row=100, column=0)
 
-            def cancel(*args):
+            def cancel(*_args):
                 root.destroy()
             cancel_button = ttk.Button(root, text="Cancel", command=cancel)
             cancel_button.grid(row=100, column=1)
+
+            root.bind('<Return>', run)
+            root.bind('<Escape>', cancel)
 
         self.sidebar_search = ttk.Button(self.sidebar, text="Search", command=search)
         self.sidebar_search.grid(row=3, column=0)
