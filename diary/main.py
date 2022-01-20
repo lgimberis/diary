@@ -10,22 +10,80 @@ from tkinter.scrolledtext import ScrolledText
 from diary.diary_handler import Diary
 from diary.scroll_frame import ScrollableFrame
 
+from tkcalendar import Calendar, DateEntry
+
 
 DEFAULT_CATEGORY = "Diary"
 SCROLLBAR_WIDTH = 30  # Width of scrollbar in pixels, plus a little extra space.
 TIMESTAMP_WIDTH = 40
 BACKGROUND = "#f0f0f0"
 DELETE_BUTTON_WIDTH = 20  # Width in pixels of the todo-list 'delete' button
+WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 
-def wrap_labels(master, labels):
-    def f(*args):
-        offset = SCROLLBAR_WIDTH
-        if labels:
-            offset += max([t.winfo_width() for t, c in labels])
-        for t, label in labels:
-            label.configure(wraplength=max(master.winfo_width() - offset, 1))
-    return f
+def iso_to_weekday(iso_timestamp: str, relative=True) -> str:
+    """Extract the weekday from a given ISO timestamp.
+
+    If relative is True, it will return 'Today' or 'Yesterday' if that is what iso_timestamp corresponds to.
+    """
+    target_date = datetime.datetime.fromisoformat(iso_timestamp).date()
+
+    if relative:
+        today = datetime.datetime.now().date()
+
+        if today == target_date:
+            return "Today"
+        if today == target_date + datetime.timedelta(days=1):
+            return "Yesterday"
+    return WEEKDAYS[target_date.weekday()]
+
+
+class DateTimeSelectorWindow:
+    def __init__(self, master, entryvar):
+        self.root = Toplevel(master)
+        self.entryvar = entryvar
+        self.timestamp = ""
+
+        today = datetime.datetime.now()
+
+        calendar = Calendar(self.root, font="Arial 14", selectmode='day', locale='en_US',
+                            cursor="hand1", year=today.year, month=today.month, day=today.day, )
+        calendar.grid(row=0, column=0, columnspan=2, sticky="NESW")
+
+        # Need a mini-frame to get padding on the Entry
+        time_of_day_frame = ttk.Frame(self.root, padding="3 50 3 3")
+        time_of_day_frame.grid(row=1, column=0, columnspan=2, sticky="NESW")
+
+        time_of_day_label = ttk.Label(time_of_day_frame, text="Time: ")
+        time_of_day_label.grid(row=1, column=0, sticky="NESW")
+
+        time_of_day_var = StringVar()
+        time_of_day_var.set("00:00")
+        time_of_day = ttk.Entry(time_of_day_frame, textvariable=time_of_day_var)
+        time_of_day.grid(row=1, column=1, sticky="NESW")
+
+        def submit(*_args):
+            month, day, year = calendar.get_date().split("/")  # (D)M/(D)D/YY, no zero-padding
+            year = int(year)+2000  # I know, I know. It is what it is.
+            iso_date = f"{year}-{int(month):02}-{int(day):02}"
+            self.timestamp = f"{iso_date} {time_of_day_var.get().strip()}"
+            self.entryvar.set(self.timestamp)
+            self.root.destroy()
+
+        def cancel(*_args):
+            self.root.destroy()
+
+        submit_button = ttk.Button(self.root, text="Select", command=submit)
+        submit_button.grid(row=2, column=0, sticky="W")
+
+        cancel_button = ttk.Button(self.root, text="Cancel", command=cancel)
+        cancel_button.grid(row=2, column=1, sticky="E")
+
+    def get_selection(self):
+        return self.timestamp
+
+    def __bool__(self):
+        return self.root.winfo_exists() if self.root else False
 
 
 class GenericWindow:
@@ -38,7 +96,7 @@ class GenericWindow:
         self.update_list = []
 
     def __bool__(self):
-        return bool(self.root.winfo_exists())
+        return bool(self.root.winfo_exists()) if self.root else False
 
     def update(self):
         for item in self.update_list:
@@ -124,6 +182,14 @@ class EntryFrame(ScrollableFrame):
             for entry, timestamp in zip(entries, timestamps):
                 self.add_entry(entry, timestamp)
 
+    def clear(self):
+        for timestamp, entry in zip(self.timestamps, self.entries):
+            timestamp.destroy()
+            entry.destroy()
+        self.timestamps = []
+        self.entries = []
+        self.count_entries = 0
+
     def add_entry(self, entry, timestamp):
         self.count_entries += 1
         self.view.rowconfigure(self.count_entries, weight=1)
@@ -138,8 +204,7 @@ class EntryFrame(ScrollableFrame):
 
     def update(self):
         if self.master.winfo_exists() and self.entries:
-            bbox = self.master.bbox(self.entries[0])
-            width = max(bbox[2] - SCROLLBAR_WIDTH - TIMESTAMP_WIDTH, 0)
+            width = max(self.entries[0].winfo_width() - self._scrollbar.winfo_width(), 0)
             for label_c in self.entries:
                 label_c.configure(wraplength=width)
 
@@ -156,64 +221,88 @@ class PreviousWindow(GenericWindow):
         self.sidebar = Frame(self.root)
         self.sidebar.grid(row=0, column=0, sticky="NW")
 
-        self.yesterday_window = None
-        self.yesterday_entry_frame = None
-
-        def yesterday(*args):
-            """Opens a window of all messages from yesterday.
-            """
-            self.yesterday_window = Toplevel(self.master)
-            self.yesterday_window.grid_columnconfigure(0, weight=1)
-            self.yesterday_window.grid_rowconfigure(0, weight=1)
-
-            entries = self.diary.get_days_ago(1)
-            self.yesterday_entry_frame = EntryFrame(self.yesterday_window)
-            self.yesterday_entry_frame.grid(row=0, column=0, sticky="NESW")
-            self.update_list.append(self.yesterday_entry_frame)
-            for rowid, timestamp, entry in entries:
-                self.yesterday_entry_frame.add_entry(entry, timestamp)
-
-            def close(*args):
-                self.yesterday_window.destroy()
-                self.yesterday_window = None
-
-            close_button = ttk.Button(self.yesterday_window, text="Close", command=close)
-            close_button.grid(row=1, column=0, sticky="E")
-
-        self.sidebar_yesterday = Button(self.sidebar, text="Yesterday", command=yesterday)
-        self.sidebar_yesterday.grid(row=0, column=0)
-
         self.entry_frame = EntryFrame(self.root)
         self.entry_frame.grid(row=0, column=1, sticky="NESW")
         self.update_list.append(self.entry_frame)
-        entries = self.diary.get_since_days_ago(7)
 
-        time_now = datetime.datetime.now()
-        weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-        def format_timestamp(t):
-            """Convert the ISO format timestamp to one that indicates day and time.
-            """
-            _timestamp = ""
-            dt = datetime.datetime.fromisoformat(t)
-            if dt.day == time_now.day:
-                _timestamp = "Today "
-            elif dt.day + 1 == time_now.day:
-                _timestamp = "Yesterday "
-            else:
-                _timestamp = f"{weekdays[dt.weekday()]} "
+        def today_or_yesterday(days_ago):
+            def f(*args):
+                self.entry_frame.clear()
+                for rowid, timestamp, entry in self.diary.get_days_ago(days_ago):
+                    timestamp_formatted = datetime.datetime.fromisoformat(timestamp).strftime("%H:%M")
+                    self.entry_frame.add_entry(entry, timestamp_formatted)
+            return f
 
-            _timestamp += f"{dt.strftime('%H:%M')}"
-            return _timestamp
+        def seven_days(*args):
+            self.entry_frame.clear()
+            for rowid, timestamp, entry in self.diary.get_since_days_ago(7):
+                weekday = iso_to_weekday(timestamp)
+                timestamp_formatted = (datetime.datetime.fromisoformat(timestamp)).strftime("%H:%M")
+                self.entry_frame.add_entry(entry, f"{weekday} {timestamp_formatted}")
 
-        for rowid, timestamp, entry in entries:
-            self.entry_frame.add_entry(entry, format_timestamp(timestamp))
+        self.sidebar_today = ttk.Button(self.sidebar, text="Today", command=today_or_yesterday(0))
+        self.sidebar_today.grid(row=0, column=0)
+
+        self.sidebar_yesterday = ttk.Button(self.sidebar, text="Yesterday", command=today_or_yesterday(1))
+        self.sidebar_yesterday.grid(row=1, column=0)
+
+        self.sidebar_seven_days = ttk.Button(self.sidebar, text="Past 7 days", command=seven_days)
+        self.sidebar_seven_days.grid(row=2, column=0)
+
+        def search(*args):
+            root = Toplevel(self.master)
+
+            # Add a box to filter by time
+            time_label = ttk.Label(root, text="Filter by time:")
+            time_label.grid(row=0, column=0, columnspan=2, sticky="W")
+
+            start_time = StringVar()
+            time_start_entry = ttk.Entry(root, textvariable=start_time)
+            time_start_entry.grid(row=1, column=0, sticky="NESW")
+
+            end_time = StringVar()
+            time_end_entry = ttk.Entry(root, textvariable=end_time)
+            time_end_entry.grid(row=2, column=0, sticky="NESW")
+
+            def get_start_time(*_args):
+                self.search_start_time = DateTimeSelectorWindow(root, start_time)
+
+            def get_end_time(*_args):
+                self.search_end_time = DateTimeSelectorWindow(root, end_time)
+
+            time_start_calendar_button = ttk.Button(root, text="Select start date", command=get_start_time)
+            time_start_calendar_button.grid(row=1, column=1)
+
+            time_end_calendar_button = ttk.Button(root, text="Select end date", command=get_end_time)
+            time_end_calendar_button.grid(row=2, column=1)
+
+
+            # Add a box to filter by category
+
+            # Add a box to filter by text
+
+            def run(*args):
+                # Perform the search
+                # Update the entry frame with results
+                root.destroy()
+
+            # Add buttons
+            search_button = ttk.Button(root, text="Search", command=run)
+            search_button.grid(row=100, column=0)
+
+            def cancel(*args):
+                root.destroy()
+            cancel_button = ttk.Button(root, text="Cancel", command=cancel)
+            cancel_button.grid(row=100, column=1)
+
+        self.sidebar_search = ttk.Button(self.sidebar, text="Search", command=search)
+        self.sidebar_search.grid(row=3, column=0)
+
+        # Load up previous 7 days by default
+        seven_days()
 
     def refresh(self):
         pass
-    #
-    # def update(self):
-    #     if self.yesterday_window:
-    #         self.yesterday_entry_frame.update()
 
 
 class TodoManager:
