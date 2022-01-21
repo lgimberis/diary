@@ -448,17 +448,14 @@ class DiaryProgram(Frame):
     """Master class for the program's GUI.
     """
 
-    def __init__(self, master):
+    def __init__(self, master, root_directory=None):
         super().__init__(master)
 
         self.red_cross = PhotoImage(file='./red_cross.png')
 
         # Instantiate the Diary
-        if len(sys.argv) > 1:
-            root_directory = Path(sys.argv[1]).absolute()
-        else:
+        if not root_directory:
             root_directory = Path().absolute()
-
         self.diary = Diary(root_directory)
 
         # Create a small sidebar containing a column of buttons
@@ -539,8 +536,12 @@ class DiaryProgram(Frame):
 
 def main():
     root = Tk()
-    program = DiaryProgram(root)
-    program.grid(sticky=(N, E, S, W))
+
+    root_directory = Path().absolute()
+    if len(sys.argv) > 1:
+        root_directory = Path(sys.argv[1]).absolute()
+    program = DiaryProgram(root, root_directory)
+    program.grid(sticky="NESW")
     root.grid_columnconfigure(0, weight=1)
     root.grid_rowconfigure(0, weight=1)
     try:

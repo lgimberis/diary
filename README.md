@@ -1,18 +1,12 @@
-## Disclaimer
-THIS PROGRAM IS INCOMPLETE - THE FEATURES DESCRIBED BELOW ARE PRESENT, BUT NOT THOROUGHLY TESTED.
-**THIS PROGRAM MAY PERMANENTLY DELETE FILES FROM YOUR COMPUTER.**
-I ACCEPT NO RESPONSIBILITY FOR THIS.
-I DO NOT RECOMMEND ANYONE USE THIS IN ITS CURRENT STATE UNLESS THEY'RE REALLY SURE WHAT THEY'RE DOING.
-YOU HAVE BEEN WARNED.
 
-## Summary
-Diary is a program which encourages daily diary-style updates to encourage introspection and track productivity.
-It manages a directory of plain-text files with minor markup, which can be accessed even without the program afterwards.
+# Summary
+Diary is a program which facilitates daily diary-style updates to encourage introspection and track productivity.
+It records all inputs into a single database file, which can later be accessed independently of this program.
 
 Features:
- - Can either open an external text editor, use the basic built-in editor.
- - Can be set up to prompt daily for updates at specified time(s).
- - Updates are timestamped, can be categorised and/or tagged, and are searchable using any combination of the prior.
- - Has an optional Pomodoro functionality complete with updates and tracking.
- - Has an optional daily 'Rating' functionality.
-
+ - A minimalistic (read: ugly) GUI
+ - A to-do list, shown on startup
+ - A calendar system, which presents reminders on the startup screen
+ - Logging and timestamping of all entries
+ - Category system for grouping entries by their purpose
+ - Convenient searching of previous entries by time, category, or keywords
