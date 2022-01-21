@@ -105,10 +105,10 @@ class PreviousWindow(GenericWindow):
 
     The main window lists all messages with the most recent first."""
 
-    def __init__(self, master):
+    def __init__(self, master, __diary):
         super().__init__(master)
         self.root.title("Previous Entries")
-        self.diary = self.master.get_diary()
+        self.__diary = __diary
 
         self.sidebar = Frame(self.root)
         self.sidebar.grid(row=0, column=0, sticky="NW")
@@ -117,30 +117,29 @@ class PreviousWindow(GenericWindow):
         self.entry_frame.grid(row=0, column=1, sticky="NESW")
         self.update_list.append(self.entry_frame)
 
-        def today_or_yesterday(days_ago):
+        def entries_from_previous_day(days_ago, since=False):
             def f(*args):
                 self.entry_frame.clear()
-                for rowid, timestamp, entry in self.diary.get_day(days_ago):
+                for rowid, timestamp, entry in self.__diary.get_day(days_ago, since=since):
                     self.entry_frame.add_message(entry, timestamp)
             return f
 
-        def seven_days(*args):
-            self.entry_frame.clear()
-            for rowid, timestamp, entry in self.diary.get_day(7, since=True):
-                weekday = diary.iso_to_weekday(timestamp)
-                timestamp_formatted = (datetime.datetime.fromisoformat(timestamp)).strftime("%H:%M")
-                self.entry_frame.add_message(entry, timestamp)
-
-        self.sidebar_today = ttk.Button(self.sidebar, text="Today", command=today_or_yesterday(0))
+        self.sidebar_today = ttk.Button(self.sidebar,
+                                        text="Today",
+                                        command=entries_from_previous_day(days_ago=0))
         self.sidebar_today.grid(row=0, column=0)
 
-        self.sidebar_yesterday = ttk.Button(self.sidebar, text="Yesterday", command=today_or_yesterday(1))
+        self.sidebar_yesterday = ttk.Button(self.sidebar,
+                                            text="Yesterday",
+                                            command=entries_from_previous_day(days_ago=1))
         self.sidebar_yesterday.grid(row=1, column=0)
 
-        self.sidebar_seven_days = ttk.Button(self.sidebar, text="Past 7 days", command=seven_days)
+        self.sidebar_seven_days = ttk.Button(self.sidebar,
+                                             text="Past 7 days",
+                                             command=entries_from_previous_day(days_ago=7, since=True))
         self.sidebar_seven_days.grid(row=2, column=0)
 
-        def search(*args):
+        def entry_search(*args):
             root = Toplevel(self.master)
             root.title("Search Previous Entries")
 
@@ -196,14 +195,14 @@ class PreviousWindow(GenericWindow):
                 end_time = end_time_var.get().strip()
                 category = category_var.get().strip()
                 text_filter = text_filter_var.get().strip()
-                if category and not self.diary.get_category_id(category):
+                if category and not self.__diary.get_category_id(category):
                     messagebox.showerror("Invalid Category", f"Category '{category}' is not associated with any entries.")
                     root.focus()
                 elif not (start_time or end_time or category or text_filter):
                     messagebox.showerror("Filter Required", "Please filter on at least one field.")
                     root.focus()
                 else:
-                    entries = list(self.diary.entry_search(start_time, end_time, category, text_filter))
+                    entries = list(self.__diary.entry_search(start_time, end_time, category, text_filter))
                     if entries:
                         self.entry_frame.clear()
                         for rowid, timestamp, entry in entries:
@@ -226,11 +225,11 @@ class PreviousWindow(GenericWindow):
             root.bind('<Return>', run)
             root.bind('<Escape>', cancel)
 
-        self.sidebar_search = ttk.Button(self.sidebar, text="Search", command=search)
+        self.sidebar_search = ttk.Button(self.sidebar, text="Search", command=entry_search)
         self.sidebar_search.grid(row=3, column=0)
 
         # Load up previous 7 days by default
-        seven_days()
+        entries_from_previous_day(7, since=True)()
 
     def refresh(self):
         pass
@@ -336,7 +335,7 @@ class DiaryProgram(Frame):
         # Instantiate the Diary
         if not root_directory:
             root_directory = Path().absolute()
-        self.diary = diary.diary_handler.Diary(root_directory)
+        self.__diary = diary.diary_handler.Diary(root_directory)
 
         # Create a small sidebar containing a column of buttons
         sidebar = Frame(self)
@@ -354,7 +353,7 @@ class DiaryProgram(Frame):
         sidebar_settings.grid(row=3, sticky=(W, E))
 
         # Inline the to-do list
-        self.todo_list = TodoManager(self, self.diary, self.red_cross)
+        self.todo_list = TodoManager(self, self.__diary, self.red_cross)
 
         self.today_window = None
         self.previous_window = None
@@ -369,7 +368,7 @@ class DiaryProgram(Frame):
         calendar_frame_header.grid(row=0)
 
         row_counter = 1
-        calendar_items = self.diary.get_calendar_this_week()
+        calendar_items = self.__diary.get_calendar_this_week()
         if calendar_items:
             for calendar_item in calendar_items:
                 # TODO
@@ -391,10 +390,10 @@ class DiaryProgram(Frame):
         if self.today_window:
             self.today_window.focus()
         else:
-            self.today_window = TodayWindow(self, self.diary)
+            self.today_window = TodayWindow(self, self.__diary)
 
     def get_diary(self):
-        return self.diary
+        return self.__diary
 
     def previous(self):
         """Open up a dialog box for searching through previous entries.
@@ -402,7 +401,7 @@ class DiaryProgram(Frame):
         if self.previous_window:
             self.previous_window.focus()
         else:
-            self.previous_window = PreviousWindow(self)
+            self.previous_window = PreviousWindow(self, self.__diary)
 
     def settings(self):
         """Open the settings dialog box.
@@ -433,7 +432,6 @@ def main():
     except TclError as e:
         # Expected normal close of the program
         pass
-    program.diary.close()
 
 
 if __name__ == "__main__":

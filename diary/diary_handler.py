@@ -224,14 +224,14 @@ class Diary:
         # Start / end time component
         if start_time or end_time:
             if start_time and end_time:
-                time_condition = f'timestamp BETWEEN ":start_time" AND ":end_time"'
+                time_condition = f'timestamp BETWEEN :start_time AND :end_time'
                 values["start_time"] = start_time
                 values["end_time"] = end_time
             elif start_time:
-                time_condition = f'timestamp >= ":start_time"'
+                time_condition = f'timestamp >= :start_time'
                 values["start_time"] = start_time
             else:
-                time_condition = f'timestamp <= ":end_time"'
+                time_condition = f'timestamp <= :end_time'
                 values["end_time"] = end_time
             full_statement += time_condition
             need_and = True
@@ -267,11 +267,3 @@ class Diary:
         """
 
         return datetime.datetime.now().isoformat(sep=' ')
-
-    def close(self) -> None:
-        """Perform any relevant teardown operations.
-        """
-
-        # Save and close database
-        self.con.commit()
-        self.con.close()
