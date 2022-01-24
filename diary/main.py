@@ -100,6 +100,111 @@ class TodayWindow(GenericWindow):
         self.category_combobox["values"] = categories
 
 
+class EntrySearchWindow(GenericWindow):
+    def __init__(self, master, __diary, entry_frame):
+        super().__init__(master)
+        self.root.title("Search Previous Entries")
+        self.__diary = __diary
+        self.entry_frame = entry_frame
+
+        # Add a box to filter by time
+        time_label = ttk.Label(self.root, text="Filter by time:")
+        time_label.grid(row=0, column=0, columnspan=2, sticky="W")
+
+        self.start_time_var = StringVar()
+        time_start_entry = ttk.Entry(self.root, textvariable=self.start_time_var)
+        time_start_entry.grid(row=1, column=1, sticky="NESW")
+
+        self.end_time_var = StringVar()
+        time_end_entry = ttk.Entry(self.root, textvariable=self.end_time_var)
+        time_end_entry.grid(row=2, column=1, sticky="NESW")
+
+        self.start_time_selector = None
+        self.end_time_selector = None
+
+        def get_start_time(*args):
+            if self.start_time_selector:
+                self.start_time_selector.focus()
+            else:
+                self.start_time_selector = diary.date_selection_window.DateTimeSelectorWindow(self.root, self.start_time_var)
+
+        def get_end_time(*args):
+            if self.end_time_selector:
+                self.end_time_selector.focus()
+            else:
+                self.end_time_selector = self.search_end_time = diary.date_selection_window.DateTimeSelectorWindow(self.root, self.end_time_var,
+                                                                                      default_time="23:59")
+
+        time_start_calendar_button = ttk.Button(self.root, text="Select earliest date", command=get_start_time)
+        time_start_calendar_button.grid(row=1, column=0)
+
+        time_end_calendar_button = ttk.Button(self.root, text="Select latest date", command=get_end_time)
+        time_end_calendar_button.grid(row=2, column=0)
+
+        # Add a box to filter by category
+        category_label = ttk.Label(self.root, text="Category: ")
+        category_label.grid(row=3, column=0)
+
+        categories = [""]
+        for row in self.__diary.get_categories():
+            categories.append(row[1])
+        if diary.DEFAULT_CATEGORY not in categories:
+            categories.append(diary.DEFAULT_CATEGORY)
+        self.category_var = StringVar()
+        self.category_var.set("")
+        category_combobox = ttk.Combobox(self.root, textvariable=self.category_var, values=categories)
+        category_combobox.grid(row=3, column=1, sticky="NESW")
+
+        # Add a box to filter by text
+        text_filter_label = ttk.Label(self.root, text="Contains text: ")
+        text_filter_label.grid(row=4, column=0)
+
+        self.text_filter_var = StringVar()
+        text_filter_entry = ttk.Entry(self.root, textvariable=self.text_filter_var)
+        text_filter_entry.grid(row=4, column=1, sticky="NESW")
+
+        def search(*args):
+            if self.run():
+                self.root.destroy()
+            else:
+                self.focus()
+
+        # Add buttons
+        search_button = ttk.Button(self.root, text="Search", command=search)
+        search_button.grid(row=100, column=0)
+
+        def cancel(*_args):
+            self.root.destroy()
+
+        cancel_button = ttk.Button(self.root, text="Cancel", command=cancel)
+        cancel_button.grid(row=100, column=1)
+
+        self.root.bind('<Return>', search)
+        self.root.bind('<Escape>', cancel)
+
+    def run(self):
+        # Update the entry frame with results
+        start_time = self.start_time_var.get().strip()
+        end_time = self.end_time_var.get().strip()
+        category = self.category_var.get().strip()
+        text_filter = self.text_filter_var.get().strip()
+
+        if category and not self.__diary.get_category_id(category):
+            messagebox.showerror("Invalid Category", f"Category '{category}' is not associated with any entries.")
+        elif not (start_time or end_time or category or text_filter):
+            messagebox.showerror("Filter Required", "Please filter on at least one field.")
+        else:
+            entries = list(self.__diary.entry_search(start_time, end_time, category, text_filter))
+            if entries:
+                self.entry_frame.clear()
+                for rowid, timestamp, entry in entries:
+                    self.entry_frame.add_message(entry, timestamp)
+                return True
+            else:
+                messagebox.showinfo("Search failed", "No results found")
+        return False
+
+
 class PreviousWindow(GenericWindow):
     """Open a window for searching, reviewing and/or editing previous entries.
 
@@ -139,91 +244,13 @@ class PreviousWindow(GenericWindow):
                                              command=entries_from_previous_day(days_ago=7, since=True))
         self.sidebar_seven_days.grid(row=2, column=0)
 
+        self.entry_search_window = None
+
         def entry_search(*args):
-            root = Toplevel(self.master)
-            root.title("Search Previous Entries")
-
-            # Add a box to filter by time
-            time_label = ttk.Label(root, text="Filter by time:")
-            time_label.grid(row=0, column=0, columnspan=2, sticky="W")
-
-            start_time_var = StringVar()
-            time_start_entry = ttk.Entry(root, textvariable=start_time_var)
-            time_start_entry.grid(row=1, column=1, sticky="NESW")
-
-            end_time_var = StringVar()
-            time_end_entry = ttk.Entry(root, textvariable=end_time_var)
-            time_end_entry.grid(row=2, column=1, sticky="NESW")
-
-            def get_start_time(*_args):
-                self.search_start_time = diary.date_selection_window.DateTimeSelectorWindow(root, start_time_var)
-
-            def get_end_time(*_args):
-                self.search_end_time = diary.date_selection_window.DateTimeSelectorWindow(root, end_time_var, default_time="23:59")
-
-            time_start_calendar_button = ttk.Button(root, text="Select earliest date", command=get_start_time)
-            time_start_calendar_button.grid(row=1, column=0)
-
-            time_end_calendar_button = ttk.Button(root, text="Select latest date", command=get_end_time)
-            time_end_calendar_button.grid(row=2, column=0)
-
-            # Add a box to filter by category
-            category_label = ttk.Label(root, text="Category: ")
-            category_label.grid(row=3, column=0)
-
-            categories = [""]
-            for row in self.master.get_diary().get_categories():
-                categories.append(row[1])
-            if diary.DEFAULT_CATEGORY not in categories:
-                categories.append(diary.DEFAULT_CATEGORY)
-            category_var = StringVar()
-            category_var.set("")
-            category_combobox = ttk.Combobox(root, textvariable=category_var, values=categories)
-            category_combobox.grid(row=3, column=1, sticky="NESW")
-
-            # Add a box to filter by text
-            text_filter_label = ttk.Label(root, text="Contains text: ")
-            text_filter_label.grid(row=4, column=0)
-
-            text_filter_var = StringVar()
-            text_filter_entry = ttk.Entry(root, textvariable=text_filter_var)
-            text_filter_entry.grid(row=4, column=1, sticky="NESW")
-
-            def run(*_args):
-                # Update the entry frame with results
-                start_time = start_time_var.get().strip()
-                end_time = end_time_var.get().strip()
-                category = category_var.get().strip()
-                text_filter = text_filter_var.get().strip()
-                if category and not self.__diary.get_category_id(category):
-                    messagebox.showerror("Invalid Category", f"Category '{category}' is not associated with any entries.")
-                    root.focus()
-                elif not (start_time or end_time or category or text_filter):
-                    messagebox.showerror("Filter Required", "Please filter on at least one field.")
-                    root.focus()
-                else:
-                    entries = list(self.__diary.entry_search(start_time, end_time, category, text_filter))
-                    if entries:
-                        self.entry_frame.clear()
-                        for rowid, timestamp, entry in entries:
-                            self.entry_frame.add_message(entry, timestamp)
-                        # Destroy search window
-                        root.destroy()
-                    else:
-                        messagebox.showinfo("Search failed", "No results found")
-                        root.focus()
-
-            # Add buttons
-            search_button = ttk.Button(root, text="Search", command=run)
-            search_button.grid(row=100, column=0)
-
-            def cancel(*_args):
-                root.destroy()
-            cancel_button = ttk.Button(root, text="Cancel", command=cancel)
-            cancel_button.grid(row=100, column=1)
-
-            root.bind('<Return>', run)
-            root.bind('<Escape>', cancel)
+            if self.entry_search_window:
+                self.entry_search_window.focus()
+            else:
+                self.entry_search_window = EntrySearchWindow(self.root, self.__diary, self.entry_frame)
 
         self.sidebar_search = ttk.Button(self.sidebar, text="Search", command=entry_search)
         self.sidebar_search.grid(row=3, column=0)
@@ -231,14 +258,11 @@ class PreviousWindow(GenericWindow):
         # Load up previous 7 days by default
         entries_from_previous_day(7, since=True)()
 
-    def refresh(self):
-        pass
-
 
 class TodoManager:
-    def __init__(self, master, diary, image):
+    def __init__(self, master, __diary, image):
         self.master = master
-        self.diary = diary
+        self.__diary = __diary
         self.root = None
         self.todo_list_labels = []
         self.image = image
@@ -262,7 +286,7 @@ class TodoManager:
         todo_list_header = Label(todo_list_frame, text="To-Do List")
         todo_list_header.grid(row=0, sticky="NEW")
         # Grab the current to-do list
-        todo_list_items = list(self.diary.todo_list_get())
+        todo_list_items = list(self.__diary.todo_list_get())
         if todo_list_items:
             todo_list_item_frame = diary.scroll_frame.ScrollableFrame(todo_list_frame, background=diary.BACKGROUND)
             todo_list_item_frame.grid(row=1, columnspan=2, sticky="NESW")
@@ -300,7 +324,7 @@ class TodoManager:
         def add(*args):
             text = entry_field.get("1.0", "end-1c").strip()
             if len(text) > 0:
-                self.diary.todo_list_add(text)
+                self.__diary.todo_list_add(text)
                 entry.destroy()
                 self.refresh()
 
@@ -318,7 +342,7 @@ class TodoManager:
 
     def remove_todo_list_item_builder(self, rowid):
         def f(*args):
-            self.diary.todo_list_remove(rowid)
+            self.__diary.todo_list_remove(rowid)
             self.refresh()
         return f
 

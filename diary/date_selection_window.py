@@ -49,4 +49,8 @@ class DateTimeSelectorWindow:
         cancel_button.grid(row=2, column=1, sticky="E")
 
     def __bool__(self):
-        return self.root.winfo_exists() if self.root else False
+        return bool(self.root.winfo_exists()) if self.root else False
+
+    def focus(self):
+        if self:
+            self.root.focus()

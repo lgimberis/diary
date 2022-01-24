@@ -21,7 +21,8 @@ class ScrollableFrame(tk.Frame):
         self._scrollbar.grid(row=0, column=1, sticky="NS")
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
-        self.__canvas_window = self.__canvas.create_window((0, 0), window=self.view, anchor="nw", tags="self.view")
+        self.__canvas_window = self.__canvas.create_window((4,4), window=self.view, anchor="nw",
+                                  tags="self.view")
 
         # Bind resizing events
         self.view.bind("<Configure>", self.__on_frame_configure)
