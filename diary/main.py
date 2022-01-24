@@ -65,6 +65,7 @@ class TodayWindow(GenericWindow):
         if entries := self.__diary.get_day(0):
             for row, (rowid, timestamp, entry_text) in enumerate(entries):
                 self.entry_frame.add_message(entry_text, timestamp)
+        self.entry_frame.scroll_to_end()
 
         # Refresh to fill in the category combobox
         self.refresh()
@@ -79,6 +80,7 @@ class TodayWindow(GenericWindow):
                 self.entry_frame.add_message(message, _timestamp)
                 self.entry_field.delete("1.0", "end-1c")
                 self.refresh()
+                self.entry_frame.scroll_to_end()
 
         def close(*args):
             self.root.destroy()
@@ -227,6 +229,8 @@ class PreviousWindow(GenericWindow):
                 self.entry_frame.clear()
                 for rowid, timestamp, entry in self.__diary.get_day(days_ago, since=since):
                     self.entry_frame.add_message(entry, timestamp)
+
+                self.entry_frame.scroll_to_end()
             return f
 
         self.sidebar_today = ttk.Button(self.sidebar,

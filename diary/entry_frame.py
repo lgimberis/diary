@@ -50,8 +50,26 @@ class EntryFrame(diary.scroll_frame.ScrollableFrame):
         entry_label.grid(row=self.count_entries, column=1, sticky="NESW")
         self.entries.append(entry_label)
 
+    def scroll_to_end(self, *args):
+        """Scroll to the end of the frame, such that the most recent messages are visible.
+        """
+
+        # In the instance this is a brand-new frame which has not yet been displayed,
+        # Due to word wrapping we have to call update twice in a row to ensure we scroll to the very end.
+        # I know, I know.
+        # First update will render the frame's contents.
+        self.update()
+        # Second update will do any required wrapping of the now-present labels.
+        self.update()
+        # With content displayed and correctly wrapped, we can finally scroll to the end.
+        super().scroll_to_end(*args)
+
     def update(self):
+        """Update all labels so word wrapping is correct for current window width.
+        """
+
+        super().update()
         if self.master.winfo_exists() and self.entries:
             width = max(self.entries[0].winfo_width() - self._scrollbar.winfo_width(), 0)
-            for label_c in self.entries:
-                label_c.configure(wraplength=width)
+            for label in self.entries:
+                label.configure(wraplength=width)

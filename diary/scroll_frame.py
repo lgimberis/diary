@@ -21,8 +21,8 @@ class ScrollableFrame(tk.Frame):
         self._scrollbar.grid(row=0, column=1, sticky="NS")
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
-        self.__canvas_window = self.__canvas.create_window((4,4), window=self.view, anchor="nw",
-                                  tags="self.view")
+        self.__canvas_window = self.__canvas.create_window((0, 0), window=self.view, anchor="nw",
+                                                           tags="self.view")
 
         # Bind resizing events
         self.view.bind("<Configure>", self.__on_frame_configure)
@@ -46,16 +46,26 @@ class ScrollableFrame(tk.Frame):
     def __on_scroll(self, event):
         """Perform scrolling of the view.
         """
-        if self.__platform == 'Windows':
-            self.__canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-        elif self.__platform == 'Darwin':
-            self.__canvas.yview_scroll(int(-1 * event.delta), "units")
+        if self.__platform == 'Windows' or self.__platform == 'Darwin':
+            scrolling_up = (event.delta > 0)
+            scroll_amount = -int(event.delta/120) if self.__platform == 'Windows' else -event.delta
         else:
-            if event.num == 4:
-                self.__canvas.yview_scroll(-1, "units")
-            elif event.num == 5:
-                self.__canvas.yview_scroll(1, "units")
-    
+            scrolling_up = (event.num == 4)  # 4 = scroll-up, 5 = scroll-down
+            scroll_amount = -1 if scrolling_up else 1
+
+        # Extra conditions to avoid scrolling beyond content
+        if scrolling_up and self.view.winfo_y() < 0 or \
+                not scrolling_up and self.view.winfo_y() - self.view.winfo_height() < -self.__canvas.winfo_height():
+            self.__canvas.yview_scroll(scroll_amount, "units")
+
+    def scroll_to_start(self, *args):
+        """Force the frame to scroll to the start of its content."""
+        self.__canvas.yview_moveto(0.00)
+
+    def scroll_to_end(self, *args):
+        """Force the frame to scroll to the end of its content."""
+        self.__canvas.yview_moveto(1.00)
+
     def __on_enter(self, event):
         """Bind mouse wheel scroll to scroll the canvas.
         """
