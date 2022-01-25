@@ -48,7 +48,7 @@ class ScrollableFrame(tk.Frame):
         """
         if self.__platform == 'Windows' or self.__platform == 'Darwin':
             scrolling_up = (event.delta > 0)
-            scroll_amount = -int(event.delta/120) if self.__platform == 'Windows' else -event.delta
+            scroll_amount = -int(event.delta/120) if self.__platform == 'Windows' else -int(event.delta)
         else:
             scrolling_up = (event.num == 4)  # 4 = scroll-up, 5 = scroll-down
             scroll_amount = -1 if scrolling_up else 1
