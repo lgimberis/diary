@@ -43,7 +43,7 @@ class TodayWindow(GenericWindow):
         self.__diary = __diary
 
         # Instantiate entries
-        self.entry_frame = diary.entry_frame.EntryFrame(self.root, background=background, timestamp_format="%H:%M")
+        self.entry_frame = diary.entry_frame.EntryFrame(self.root, background=background)
         self.entry_frame.grid(row=0, column=0, columnspan=4, sticky="NESW")
         self.entry_frame.grid_columnconfigure(0, weight=1)
         self.update_list.append(self.entry_frame)
@@ -77,10 +77,9 @@ class TodayWindow(GenericWindow):
             if len(message) > 0:
                 self.master.get_diary().add_entry(message, category_text)
                 _timestamp = self.master.get_diary().get_timestamp()
-                self.entry_frame.add_message(message, _timestamp)
+                self.entry_frame.add_message(message, _timestamp, scroll_to_end=True)
                 self.entry_field.delete("1.0", "end-1c")
                 self.refresh()
-                self.entry_frame.scroll_to_end()
 
         def close(*args):
             self.root.destroy()
@@ -201,6 +200,7 @@ class EntrySearchWindow(GenericWindow):
                 self.entry_frame.clear()
                 for rowid, timestamp, entry in entries:
                     self.entry_frame.add_message(entry, timestamp)
+                self.entry_frame.scroll_to_end()
                 return True
             else:
                 messagebox.showinfo("Search failed", "No results found")
@@ -220,7 +220,7 @@ class PreviousWindow(GenericWindow):
         self.sidebar = Frame(self.root)
         self.sidebar.grid(row=0, column=0, sticky="NW")
 
-        self.entry_frame = diary.entry_frame.EntryFrame(self.root)
+        self.entry_frame = diary.entry_frame.EntryFrame(self.root, show_day=True, day_relative=True)
         self.entry_frame.grid(row=0, column=1, sticky="NESW")
         self.update_list.append(self.entry_frame)
 
@@ -229,7 +229,6 @@ class PreviousWindow(GenericWindow):
                 self.entry_frame.clear()
                 for rowid, timestamp, entry in self.__diary.get_day(days_ago, since=since):
                     self.entry_frame.add_message(entry, timestamp)
-
                 self.entry_frame.scroll_to_end()
             return f
 
@@ -279,7 +278,7 @@ class TodoManager:
     def refresh(self):
         if self.root:
             self.root.destroy()
-        todo_list_frame = Frame(self.master, background="red")
+        todo_list_frame = Frame(self.master, background=diary.BACKGROUND)
         self.root = todo_list_frame
 
         todo_list_frame.grid(row=0, column=1, sticky="NESW")
