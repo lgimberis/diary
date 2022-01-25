@@ -11,6 +11,9 @@ data/
 #Ignore directories ending in temp
 *temp/
 
+# Ignore database files
+*.db
+
 ##################################
 # Default python .gitignore
 # Byte-compiled / optimized / DLL files
