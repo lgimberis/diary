@@ -1,0 +1,12 @@
+#!/bin/bash
+cd $(dirname -- "$(realpath $0)")/../
+if [[ -d .venv ]]
+then
+  source .venv/bin/activate
+else
+  echo Installing...
+  python -m venv .venv
+  source .venv/bin/activate
+  pip install -r requirements.txt
+fi
+python -m diary
