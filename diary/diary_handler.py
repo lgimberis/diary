@@ -148,18 +148,29 @@ class Diary:
 
         return self.cur.execute('''SELECT * from calendar''')
 
-    def get_day(self, days_ago=0, since=False) -> sqlite3.Cursor:
+    def get_day(self, days_ago=None, since=False, print_count=0) -> sqlite3.Cursor:
         """Return entries from the date 'days_ago' days ago.
 
         If 'since' is True, also return all entries since this date.
         """
 
-        date = (datetime.datetime.now().date() - datetime.timedelta(days=days_ago)).isoformat()
-        if not since:
-            date += "%"
-        statement = f"SELECT rowid, timestamp, entry FROM entries WHERE timestamp {'>=' if since else 'LIKE'} ?"
-        values = (date,)
-        return self.cur.execute(statement, values)
+        if days_ago is None and not print_count:
+            days_ago = 0
+        count_statement = "SELECT COUNT(*) FROM entries"
+        read_statement = "SELECT rowid, timestamp, entry FROM entries"
+        values = ()
+        if days_ago is not None:
+            date = (datetime.datetime.now().date() - datetime.timedelta(days=days_ago)).isoformat()
+            if not since:
+                date += "%"
+            statement_extension = f" WHERE timestamp {'>=' if since else 'LIKE'} ?"
+            count_statement += statement_extension
+            read_statement += statement_extension
+            values = (date,)
+        if print_count:
+            message_count = list(self.cur.execute(count_statement, values))[0][0]
+            read_statement += f" LIMIT {print_count} OFFSET {message_count - print_count}"
+        return self.cur.execute(read_statement, values)
 
     def get_categories(self) -> sqlite3.Cursor:
         """Get all categories.
