@@ -64,7 +64,6 @@ class Diary:
             filename=str(self.log_file),
             format='[%(asctime)s.%(msecs)03d] %(levelname)s:%(message)s',
             datefmt='%Y/%m/%d %H:%M:%S',
-            encoding='utf-8',
             level=self.logging_level
         )
         logging.info("Logging initialised")
