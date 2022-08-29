@@ -10,7 +10,7 @@ class ConsoleDiary:
         self.running = True
 
     def get_day(self, days=None, print_count=0):
-        entries = self.__diary.get_day(days, print_count=print_count)
+        entries = self.__diary.get_entries(days, print_count=print_count)
         for (rowid, timestamp, entry) in entries:
             time = datetime.datetime.fromisoformat(timestamp)
             if days is not None:

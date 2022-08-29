@@ -148,10 +148,15 @@ class Diary:
 
         return self.cur.execute('''SELECT * from calendar''')
 
-    def get_day(self, days_ago=None, since=False, print_count=0) -> sqlite3.Cursor:
-        """Return entries from the date 'days_ago' days ago.
+    def get_entries(self, days_ago=None, since=False, print_count=0) -> sqlite3.Cursor:
+        """Return Diary entries according to filters specified in arguments.
 
-        If 'since' is True, also return all entries since this date.
+        If days_ago is given, the entries returned will be from the day {days_ago} days ago.
+        e.g. if days_ago == 0, today's entries will be returned. if 1, yesterday's will be returned.
+
+        If 'since' is also True when days_ago is specified, all entries AFTER this date will be returned.
+
+        If print_count is given, only the latest {print_count} relevant entries will be returned, still in chronological order.
         """
 
         if days_ago is None and not print_count:

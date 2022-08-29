@@ -60,7 +60,7 @@ class TodayWindow(GenericWindow):
         self.category_combobox.grid(row=2, column=1, sticky="NESW")
 
         # Populate entry frame with entries
-        if entries := self.__diary.get_day(0):
+        if entries := self.__diary.get_entries(0):
             for row, (rowid, timestamp, entry_text) in enumerate(entries):
                 self.entry_frame.add_message(entry_text, timestamp)
         self.entry_frame.scroll_to_end()
@@ -225,7 +225,7 @@ class PreviousWindow(GenericWindow):
         def entries_from_previous_day(days_ago, since=False):
             def f(*args):
                 self.entry_frame.clear()
-                for rowid, timestamp, entry in self.__diary.get_day(days_ago, since=since):
+                for rowid, timestamp, entry in self.__diary.get_entries(days_ago, since=since):
                     self.entry_frame.add_message(entry, timestamp)
                 self.entry_frame.scroll_to_end()
             return f
