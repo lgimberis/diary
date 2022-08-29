@@ -162,7 +162,7 @@ class Diary:
         if days_ago is None and not print_count:
             days_ago = 0
         count_statement = "SELECT COUNT(*) FROM entries"
-        read_statement = "SELECT rowid, timestamp, entry FROM entries"
+        read_statement = "SELECT rowid, timestamp, entry, categoryid FROM entries"
         values = ()
         if days_ago is not None:
             date = (datetime.datetime.now().date() - datetime.timedelta(days=days_ago)).isoformat()

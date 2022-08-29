@@ -36,7 +36,7 @@ class ConsoleDiary:
 
     def get_day(self, days=None, print_count=0):
         entries = self.__diary.get_entries(days, print_count=print_count)
-        for (rowid, timestamp, entry) in entries:
+        for (rowid, timestamp, entry, categoryid) in entries:
             if days is not None:
                 time = datetime.datetime.fromisoformat(timestamp)
                 time_display = time.strftime("%H:%M")
