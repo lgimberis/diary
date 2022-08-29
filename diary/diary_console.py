@@ -35,17 +35,21 @@ class ConsoleDiary:
         self.category = ''
 
     def get_day(self, days=None, print_count=0):
+        categories = {categoryid: category for categoryid, category in list(self.__diary.get_categories())}
+        #category_padding = max([len(category) for category in categories.values()])
         entries = self.__diary.get_entries(days, print_count=print_count)
-        for (rowid, timestamp, entry, categoryid) in entries:
+        for rowid, timestamp, entry, categoryid in entries:
             if days is not None:
                 time = datetime.datetime.fromisoformat(timestamp)
                 time_display = time.strftime("%H:%M")
             else:
                 time_display = relative_timestamp(timestamp)
-            print(f"[{time_display}] {entry}")
+            category_display = f"[{categories[categoryid]}]" if (
+                categories[categoryid] and categories[categoryid] != diary.DEFAULT_CATEGORY) else ''
+            print(f"[{time_display}]{category_display} {entry}")
 
     def interpret_input(self, command):
-        if not command:
+        if not command.strip():
             # Blank enter
             return
         if command == 'h':
@@ -76,7 +80,7 @@ class ConsoleDiary:
             self.category = command[1:].strip()
         else:
             # Assume the user wants to submit the command as an entry
-            category = self.category or "Diary"
+            category = self.category or diary.DEFAULT_CATEGORY
             self.__diary.add_entry(command, category)
     
     def run(self):
@@ -86,8 +90,9 @@ class ConsoleDiary:
                 prompt = f"[{self.category}]>" if self.category else ">"
                 command = input(prompt)
                 self.interpret_input(command)
-        except KeyboardInterrupt:
+        except (KeyboardInterrupt, EOFError):
             self.running = False
+            print("")  # Print newline (end='\n')
     
 
 def run(storage_location):
