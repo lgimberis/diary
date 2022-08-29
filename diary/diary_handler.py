@@ -148,7 +148,7 @@ class Diary:
 
         return self.cur.execute('''SELECT * from calendar''')
 
-    def get_entries(self, days_ago=None, since=False, print_count=0) -> sqlite3.Cursor:
+    def get_entries(self, days_ago=None, since=False, print_count=0, categoryid=None) -> sqlite3.Cursor:
         """Return Diary entries according to filters specified in arguments.
 
         If days_ago is given, the entries returned will be from the day {days_ago} days ago.
@@ -164,14 +164,18 @@ class Diary:
         count_statement = "SELECT COUNT(*) FROM entries"
         read_statement = "SELECT rowid, timestamp, entry, categoryid FROM entries"
         values = ()
+        if categoryid is not None:
+            statement_extension = f" WHERE categoryid = {categoryid}"
+        else:
+            statement_extension = ''
         if days_ago is not None:
             date = (datetime.datetime.now().date() - datetime.timedelta(days=days_ago)).isoformat()
             if not since:
                 date += "%"
-            statement_extension = f" WHERE timestamp {'>=' if since else 'LIKE'} ?"
-            count_statement += statement_extension
-            read_statement += statement_extension
+            statement_extension += (" WHERE" if categoryid is None else ' AND') + f" timestamp {'>=' if since else 'LIKE'} ?"
             values = (date,)
+        count_statement += statement_extension
+        read_statement += statement_extension
         if print_count:
             message_count = list(self.cur.execute(count_statement, values))[0][0]
             read_statement += f" LIMIT {print_count} OFFSET {message_count - print_count}"
