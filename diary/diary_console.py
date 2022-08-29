@@ -58,7 +58,10 @@ class ConsoleDiary:
                 ('t', 'Today\'s entries'),
                 ('y', 'Yesterday\'s entries'),
                 ('q', 'Quit'),
-                (': (any text)', 'Change category to given text. Categories are not created until an entry is submitted under them. Omit all text to return to default category'),
+                (': (any text)', 'Change category to given text. \n\t'
+                'Categories can later be used to easily find specific entries from a long time ago.\n\t'
+                'Categories are not created until an entry is submitted under them. \n\t'
+                'Omit all text (just enter ":") to return to default category.\n\t')
                 ('# (any number)', 'Send the last # entries. Can be combined with "t" and "y".')
             ]
             for command_key, command_explanation in COMMANDS:
@@ -85,6 +88,7 @@ class ConsoleDiary:
     
     def run(self):
         command = ""
+        print("Welcome to the Diary. Type your message and press Enter to create an entry. Enter 'h' to look up commands.")
         try:
             while self.running:
                 prompt = f"[{self.category}]>" if self.category else ">"
