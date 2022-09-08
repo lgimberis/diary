@@ -84,7 +84,7 @@ class ConsoleDiary:
             print("Search commands may be mixed and matched in this order: day, count, category")
             print("Example: 't5' - Search for the last 5 entries of today with any category.")
             print("Example: 'y3::TODO' - Search for the last 3 entries yesterday with category TODO")
-        if match := re.match(r'^([ty]?)(\d*)(::(.*))?$', command):
+        elif match := re.match(r'^([ty]?)(\d*)(::(.*))?$', command):
             count = int(match.group(2)) if match.group(2) else 0
             if match.group(3):
                 category = match.group(4)
