@@ -1,3 +1,4 @@
+from collections import defaultdict
 import datetime
 import logging
 from pathlib import Path
@@ -148,7 +149,7 @@ class Diary:
 
         return self.cur.execute('''SELECT * from calendar''')
 
-    def get_entries(self, days_ago=None, since=False, print_count=0, categoryid=None) -> sqlite3.Cursor:
+    def get_entries(self, **filters) -> sqlite3.Cursor:
         """Return Diary entries according to filters specified in arguments.
 
         If days_ago is given, the entries returned will be from the day {days_ago} days ago.
@@ -156,30 +157,63 @@ class Diary:
 
         If 'since' is also True when days_ago is specified, all entries AFTER this date will be returned.
 
-        If print_count is given, only the latest {print_count} relevant entries will be returned, still in chronological order.
+        If 'print_count' or 'count' is given, only the latest {print_count} relevant entries will be returned, still in chronological order.
         """
 
-        if days_ago is None and not print_count:
-            days_ago = 0
-        count_statement = "SELECT COUNT(*) FROM entries"
-        read_statement = "SELECT rowid, timestamp, entry, categoryid FROM entries"
-        values = ()
-        if categoryid is not None:
-            statement_extension = f" WHERE categoryid = {categoryid}"
-        else:
-            statement_extension = ''
+        filters = defaultdict(lambda: None, filters)
+
+        days_ago = filters["days_ago"]
+        since = filters["since"]
+        count = filters["print_count"] or filters["count"] or 200
+        categoryid = filters["categoryid"]
+        start_date = filters["start_date"]
+        end_date = filters["end_date"]
+
+        # Restrict timestamps
+        start_date_iso = ""
+        end_date_iso = ""
+        end_filter_syntax = " timestamp < ?"
         if days_ago is not None:
-            date = (datetime.datetime.now().date() - datetime.timedelta(days=days_ago)).isoformat()
-            if not since:
-                date += "%"
-            statement_extension += (" WHERE" if categoryid is None else ' AND') + f" timestamp {'>=' if since else 'LIKE'} ?"
-            values = (date,)
-        count_statement += statement_extension
-        read_statement += statement_extension
-        if print_count:
-            message_count = list(self.cur.execute(count_statement, values))[0][0]
-            read_statement += f" LIMIT {print_count} OFFSET {message_count - print_count}"
-        return self.cur.execute(read_statement, values)
+            # days_ago can be 0, which is falsy
+            start_date_iso = (datetime.datetime.now.date() - datetime.timedelta(days=days_ago)).isoformat()
+            if since:
+                end_date_iso = (datetime.datetime.now.date() + datetime.timedelta(days=1)).isoformat()
+            else:
+                end_date_iso = start_date_iso
+        else:
+            if start_date:
+                start_date_iso = start_date.isoformat()
+            if end_date:
+                end_date_iso = (end_date + datetime.timedelta(days=1)).isoformat()
+            elif start_date and not since:
+                end_filter_syntax = " timestamp LIKE ?"
+                end_date_iso = start_date_iso + "%"
+
+
+        filter_expressions = (
+                (categoryid is not None, " categoryid = ?", categoryid),
+                (start_date_iso, " timestamp >= ?", start_date_iso),
+                (end_date_iso, end_filter_syntax, end_date_iso),
+        )
+        statement_filters = ""
+        values = []
+        
+        for condition, filter_extension, value in filter_expressions:
+            if condition:
+                statement_filters += (" AND" if statement_filters else " WHERE") + filter_extension
+                values.append(value)
+
+        if count:
+            statement_filters += " ORDER BY rowid DESC LIMIT ?"
+            values.append(count)
+
+        full_statement = f"SELECT rowid, timestamp, entry, categoryid FROM entries{statement_filters}"
+        logging.info(f"{full_statement}")
+        try:
+            result = self.cur.execute(full_statement, values)
+            return result
+        except sqlite3.OperationalError as e:
+            raise sqlite3.OperationalError(f"{e}\nOffending statement: {full_statement}\nValues: {values}\nReport to developer")
 
     def get_categories(self) -> sqlite3.Cursor:
         """Get all categories.
