@@ -158,7 +158,7 @@ class ConsoleDiary:
             ((?<!")-(?P<end>\w*))?                      # Optionally match end time, always preceded by '-'
             \s*                                   # Remove whitespace
             ((?<!"):(?P<category>\w*))?                 # Optionally match a category together with its prefix character
-            /s*
+            \s*
             ("(?P<text>.+)")?                    # Optionally match a search term enclosed in double quotes to match to entry text
         '''
         pattern_compiled = re.compile(pattern, re.VERBOSE)
