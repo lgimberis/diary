@@ -1,3 +1,4 @@
+from collections import defaultdict
 import datetime
 import re
 
@@ -150,68 +151,72 @@ class ConsoleDiary:
         "I want all entries from between 14 and 7 days ago of category 'help'": 14-7 :help
         """
 
-        input_message = input_message[len(COMMANDS["SEARCH"].invokation):].strip()
-        pattern = r'''
-            ((?<![-:"])(?P<count>\d+)(?!\d*-))?    # Optionally match a number and make sure it's never preceded by '-' or ':' and not followed by a '-'
-            \s*                                   # Whitespace
-            ((?<![-:"])(?P<start>\w+))?            # Optionally match a start time, never preceded by ':' or '-'
-            ((?<!")-(?P<end>\w*))?                      # Optionally match end time, always preceded by '-'
-            \s*                                   # Remove whitespace
-            ((?<!"):(?P<category>\w*))?                 # Optionally match a category together with its prefix character
-            \s*
-            ("(?P<text>.+)")?                    # Optionally match a search term enclosed in double quotes to match to entry text
-        '''
-        pattern_compiled = re.compile(pattern, re.VERBOSE)
-        if match := pattern_compiled.match(input_message):
-            count = int(match.group('count')) if match.group('count') else 0 
+        query_filters = input_message[len(COMMANDS["SEARCH"].invokation):].strip()
+        query_components = re.split(r'\s+', query_filters)
+ 
+        def combine_dict(a, b):
+            return {**a, **b}
+        
+        component_patterns = (
+                (r"^:(\w+)$", lambda k, m: combine_dict(k, {"category": m.group(1)})),
+                (r"^\"(\w+)\"$", lambda k, m: combine_dict(k, {"text": m.group(1)})),                
+                (r"^\d+$", lambda kwargs, match: combine_dict(kwargs, {"count": match.group(1)})),
+                (r"^(\w+)?(-(\w+))?$", lambda k, m: combine_dict(combine_dict(k, {"start": m.group(1)}), {"end": m.group(3)})),
+        )
 
+        filters = defaultdict(lambda: None, {})
+        for component in query_components:
+            for pattern, func in component_patterns:
+                if match := re.match(pattern, component):
+                    filters = func(filters, match)
+                    break
+            else:
+                # NOTE: 'else' of 'for' triggers when 'for' does not break
+                raise ValueError(f"Search query component {component} does not match any search filter rules, please consult the help")
+
+        count = filters['count'] or 0
+
+        if filters['start_date']:
+            start_date = self.interpret_date(filters['start_date'])
+        else:
             start_date = None
-            end_date = None
-            since = False
-            try:
-                if match.group('start'):
-                    start_date = self.interpret_date(match.group('start'))
 
-                if match.group('end') is not None:
-                    if match.group('end'):
-                        end_date = self.interpret_date(match.group('end'))
-                        if not start_date:
-                            start_date = end_date
-                    else:
-                        if not start_date:
-                            start_date = end_date = datetime.date.today()
-                        since = True  # Blank means 'until now'
-
-            except ValueError:
-                print(f"Search query '{input_message}' timestamp does not match allowed values, please consult help")
-                return
+        since = False
+        end_date = None
+        if filters['end_date'] is not None:
+            if filters['end_date']:
+                end_date = self.interpret_date(filters['end_date'])
+                if not start_date:
+                    start_date = end_date
+            else:
+                if not start_date:
+                    start_date = end_date = datetime.date.today()
+                since = True
 
             
-            # Give the user a summary of their query
-            if start_date and since:
-                time_description = f" since {relative_day(start_date)}"
-            elif start_date and end_date and start_date != end_date:
-                time_description = f" between {relative_day(start_date)} and {relative_day(end_date)}"
-            elif start_date:
-                time_description = f" from {relative_day(start_date)}"
-            elif end_date:
-                time_description = f" until {relative_day(end_date)}"
-            else:
-                time_description = ""
-
-            category = match.group('category')
-            text = match.group('text')
-            if category == "":
-                category_description = f" of the default category"
-            elif category:
-                category_description = f" of category {category}"
-            else:
-                category_description = ""
-            print(f"Showing {f'up to {count} of the most recent ' if count else ''}entries{time_description}{category_description}"
-                  f"{f' containing search string `{text}`' if text else ''}".strip())
-            self.perform_search(start_date, end_date, count, category, since, text)
+        # Give the user a summary of their query
+        if start_date and since:
+            time_description = f" since {relative_day(start_date)}"
+        elif start_date and end_date and start_date != end_date:
+            time_description = f" between {relative_day(start_date)} and {relative_day(end_date)}"
+        elif start_date:
+            time_description = f" from {relative_day(start_date)}"
+        elif end_date:
+            time_description = f" until {relative_day(end_date)}"
         else:
-            print(f"Search parameters '{input_message}' not recognised. Please consult help")
+            time_description = ""
+
+        category = filters['category'] 
+        text = filters['text']
+        if category == "":
+            category_description = f" of the default category"
+        elif category:
+            category_description = f" of category {category}"
+        else:
+            category_description = ""
+        print(f"Showing {f'up to {count} of the most recent ' if count else ''}entries{time_description}{category_description}"
+              f"{f' containing search string `{text}`' if text else ''}".strip())
+        self.perform_search(start_date, end_date, count, category, since, text)
 
     def interpret_input(self, input_message):
         input_message = input_message.strip()
