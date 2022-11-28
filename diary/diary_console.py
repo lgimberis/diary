@@ -86,7 +86,7 @@ class ConsoleDiary:
         self.running = True
         self.category = ''
 
-    def perform_search(self, start_date, end_date, count=0, category=None, since=False):
+    def perform_search(self, start_date, end_date, count=0, category=None, since=False, text=None):
 
         # Start by obtaining categoryid
         categories = {categoryid: category for categoryid, category in list(self.__diary.get_categories())}
@@ -105,7 +105,7 @@ class ConsoleDiary:
             categoryid = None
 
         # Get a full list of entries matching our filters
-        entries = self.__diary.get_entries(start_date=start_date, end_date=end_date, count=count, categoryid=categoryid, since=since)
+        entries = self.__diary.get_entries(start_date=start_date, end_date=end_date, count=count, categoryid=categoryid, since=since, text=text)
 
         for _rowid, timestamp, entry, categoryid in entries:
             time_display = relative_timestamp_from_timestamp(timestamp)
@@ -152,12 +152,14 @@ class ConsoleDiary:
 
         input_message = input_message[len(COMMANDS["SEARCH"].invokation):].strip()
         pattern = r'''
-            ((?<![:-])(?P<count>\d+)(?!\d*-))?    # Optionally match a number and make sure it's never preceded by '-' or ':' and not followed by a '-'
+            ((?<![-:"])(?P<count>\d+)(?!\d*-))?    # Optionally match a number and make sure it's never preceded by '-' or ':' and not followed by a '-'
             \s*                                   # Whitespace
-            ((?<![:-])(?P<start>\w+))?            # Optionally match a start time, never preceded by ':' or '-'
-            (-(?P<end>\w*))?                      # Optionally match end time, always preceded by '-'
+            ((?<![-:"])(?P<start>\w+))?            # Optionally match a start time, never preceded by ':' or '-'
+            ((?<!")-(?P<end>\w*))?                      # Optionally match end time, always preceded by '-'
             \s*                                   # Remove whitespace
-            (:(?P<category>\w*))?                 # Optionally match a category together with its prefix character
+            ((?<!"):(?P<category>\w*))?                 # Optionally match a category together with its prefix character
+            /s*
+            ("(?P<text>.+)")?                    # Optionally match a search term enclosed in double quotes to match to entry text
         '''
         pattern_compiled = re.compile(pattern, re.VERBOSE)
         if match := pattern_compiled.match(input_message):
@@ -184,7 +186,6 @@ class ConsoleDiary:
                 print(f"Search query '{input_message}' timestamp does not match allowed values, please consult help")
                 return
 
-            category = match.group('category')
             
             # Give the user a summary of their query
             if start_date and since:
@@ -198,14 +199,17 @@ class ConsoleDiary:
             else:
                 time_description = ""
 
+            category = match.group('category')
+            text = match.group('text')
             if category == "":
                 category_description = f" of the default category"
             elif category:
                 category_description = f" of category {category}"
             else:
                 category_description = ""
-            print(f"Showing {f'up to {count} of the most recent ' if count else ''}entries{time_description}{category_description}".strip())
-            self.perform_search(start_date, end_date, count, category, since)
+            print(f"Showing {f'up to {count} of the most recent ' if count else ''}entries{time_description}{category_description}"
+                  f"{f' containing search string `{text}`' if text else ''}".strip())
+            self.perform_search(start_date, end_date, count, category, since, text)
         else:
             print(f"Search parameters '{input_message}' not recognised. Please consult help")
 

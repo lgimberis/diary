@@ -168,6 +168,7 @@ class Diary:
         categoryid = filters["categoryid"]
         start_date = filters["start_date"]
         end_date = filters["end_date"]
+        text = filters["text"]
 
         # Restrict timestamps
         start_date_iso = ""
@@ -194,6 +195,7 @@ class Diary:
                 (categoryid is not None, " categoryid = ?", categoryid),
                 (start_date_iso, " timestamp >= ?", start_date_iso),
                 (end_date_iso, end_filter_syntax, end_date_iso),
+                (text, " entry LIKE ?", f"%{text}%"),
         )
         statement_filters = ""
         values = []
