@@ -149,6 +149,18 @@ class Diary:
 
         return self.cur.execute('''SELECT * from calendar''')
 
+    def delete_entries(self, ids: list) -> None:
+        """Delete entries with rowids corresponding to {ids}.
+
+        This should be the only method through which entries can be deleted.
+        External modules calling this should always confirm that the deletion is intended.
+        """
+
+        id_strings = [str(id) for id in ids]
+        self.cur.execute(f"DELETE FROM entries WHERE rowid IN ( {','.join(id_strings)} )")
+        self.con.commit()
+
+
     def get_entries(self, **filters) -> sqlite3.Cursor:
         """Return Diary entries according to filters specified in arguments.
 

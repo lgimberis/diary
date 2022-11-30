@@ -45,15 +45,20 @@ COMMANDS = {
         "YESTERDAY": Command('y', 'Search for yesterday\'s entries'),
         "CATEGORY_SET": Command('c', QUERY_SET_HELP_TEXT),
         "SEARCH": Command('s', SEARCH_HELP_TEXT),
+        "DELETE": Command('d', 'Delete entries. You will always be prompted for confirmation'),
 }
 
 def relative_day(target: datetime.date) -> str:
+    """Return a human-relatable name for given date compared to today.
+    """
+
     today = datetime.date.today()
     days_difference = abs((today - target).days)
     return relative_day_name(days_difference)
 
 def relative_day_name(days_ago:int) -> str:
-    """Return the name of a day relative to today."""
+    """Return a human-relatable name for a date {days_ago} days ago.
+    """
 
     if days_ago == 0:
         return "Today"
@@ -64,8 +69,8 @@ def relative_day_name(days_ago:int) -> str:
     elif days_ago > 0:
         return f"{days_ago} days ago"
     else:
-        # People who mess with their system clocks punish themselves enough;
-        # I could raise an error here but then I'd be obliged to implement recovery procedures.
+        # People who mess with their system clocks punish themselves enough already;
+        # I could raise an error here but then I'd be obliged to implement recovery procedures to fix the database's timestamps.
         return f"{days_ago} days in the future (!)"
 
 def relative_timestamp_from_timestamp(timestamp: str, leniency=3) -> str:
@@ -230,6 +235,36 @@ class ConsoleDiary:
               f"{f' containing search string `{text}`' if text else ''}".strip())
         self.perform_search(start_date, end_date, count, category, text, show_id=bool(filters['show_id']))
 
+    def confirm_delete(self, ids: list):
+        """Given a list of IDs, ask for confirmation that the messages should be deleted.
+        """
+
+        response = input(f"Confirm that you wish to delete the above message{'s' if len(ids) > 1 else ''} (y/n):")
+        if response == 'y' or response == 'Y':
+            self.__diary.delete_entries(ids)
+
+    def interpret_delete(self, argument_string: str):
+        """Interpret arguments for a delete command"""
+
+        def summarise_entry(entry):
+            # [rowid] - Prints the first few characters of each messa 
+            print(f"[#{entry[0]}] - {entry[2][:40] + '...' if len(entry[2]) > 40 else entry[2]}")
+
+        if not argument_string or argument_string == "d":
+            # Try to delete previous message 
+            # 1) Get the previous message ID
+            entries = self.__diary.get_entries(count=1)
+            entry = None
+            for _entry in entries:
+                entry = _entry
+            if entry:
+                # 2) Print a summary of the message so the user knows what they're deleting
+                print("Proposal to delete most recent message:")
+                summarise_entry(entry)
+                # 3) Pass to the confirm_delete function for confirmation
+                self.confirm_delete([entry[0]])
+
+
     def interpret_input(self, input_message):
         input_message = input_message.strip()
         if not input_message:
@@ -246,6 +281,8 @@ class ConsoleDiary:
                 self.interpret_search("s t")
             elif input_message.startswith(COMMANDS["YESTERDAY"].invokation):
                 self.interpret_search("s y")
+            elif input_message.startswith(COMMANDS["DELETE"].invokation):
+                self.interpret_delete(input_message[len(COMMANDS["DELETE"].invokation):])
             elif input_message.startswith(COMMANDS["CATEGORY_SET"].invokation):
                 self.category = input_message[len(COMMANDS["CATEGORY_SET"].invokation):].strip()
                 if not self.category:
