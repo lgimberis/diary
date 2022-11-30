@@ -87,7 +87,7 @@ class ConsoleDiary:
         self.running = True
         self.category = ''
 
-    def perform_search(self, start_date, end_date, count=0, category=None, since=False, text=None):
+    def perform_search(self, start_date, end_date, count=0, category=None, text=None, show_id=False):
 
         # Start by obtaining categoryid
         categories = {categoryid: category for categoryid, category in list(self.__diary.get_categories())}
@@ -106,13 +106,14 @@ class ConsoleDiary:
             categoryid = None
 
         # Get a full list of entries matching our filters
-        entries = self.__diary.get_entries(start_date=start_date, end_date=end_date, count=count, categoryid=categoryid, since=since, text=text)
+        entries = self.__diary.get_entries(start_date=start_date, end_date=end_date, count=count, categoryid=categoryid, text=text)
 
-        for _rowid, timestamp, entry, categoryid in entries:
+        for rowid, timestamp, entry, categoryid in entries:
             time_display = relative_timestamp_from_timestamp(timestamp)
             category_display = f"[{categories[categoryid]}]" if (
                 categories[categoryid] and categories[categoryid] != diary.DEFAULT_CATEGORY) else ''
-            print(f"[{time_display}]{category_display} {entry}")
+            id_display = f"[#{rowid}]" if show_id else ""
+            print(f"{id_display}[{time_display}]{category_display} {entry}")
 
     def interpret_date(self, timestamp: str) -> datetime.date:
         """Convert the user-given timestamp or date indicator to a proper datetime object.
@@ -161,7 +162,7 @@ class ConsoleDiary:
         
         component_patterns = (
                 # Most specific
-                (r"^\#$", "show_id"),
+                (r"^(#)$", "show_id"),
                 (r"^:(\w+)$", "category"),
                 (r"^\"(\w+)\"$", "text"),
                 (r"^\`(\w+)\`$", "word"),
@@ -174,11 +175,7 @@ class ConsoleDiary:
         for component in query_components:
             for pattern, key in component_patterns:
                 if match := re.match(pattern, component):
-                    if key == "show_id":
-                        # Awkward little exception
-                        filters[key] = True
-                    else:
-                        filters[key] = match.group(1)
+                    filters[key] = match.group(1)
                     break
             else:
                 # NOTE: 'else' of 'for' triggers when 'for' does not break
@@ -187,7 +184,6 @@ class ConsoleDiary:
         filters = defaultdict(lambda: None, filters)
         count = filters['count'] or 0
 
-        since = False
         start_date = None
         end_date = None
 
@@ -232,7 +228,7 @@ class ConsoleDiary:
             category_description = ""
         print(f"Showing {f'up to {count} of the most recent ' if count else ''}entries{time_description}{category_description}"
               f"{f' containing search string `{text}`' if text else ''}".strip())
-        self.perform_search(start_date, end_date, count, category, since, text)
+        self.perform_search(start_date, end_date, count, category, text, show_id=bool(filters['show_id']))
 
     def interpret_input(self, input_message):
         input_message = input_message.strip()

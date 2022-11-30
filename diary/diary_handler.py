@@ -160,11 +160,19 @@ class Diary:
         If 'print_count' or 'count' is given, only the latest {print_count} relevant entries will be returned, still in chronological order.
         """
 
+        MAXIMUM_ENTRIES_RETURNED = 1000
+        DEFAULT_ENTRIES_RETURNED = 200
+
         filters = defaultdict(lambda: None, filters)
 
         days_ago = filters["days_ago"]
         since = filters["since"]
-        count = filters["print_count"] or filters["count"] or 200
+        count =  filters["print_count"] or filters["count"] or DEFAULT_ENTRIES_RETURNED
+        try:
+            count = min(MAXIMUM_ENTRIES_RETURNED, int(count))
+        except ValueError:
+            count = DEFAULT_ENTRIES_RETURNED
+
         categoryid = filters["categoryid"]
         start_date = filters["start_date"]
         end_date = filters["end_date"]
