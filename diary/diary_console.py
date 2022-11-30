@@ -134,10 +134,12 @@ class ConsoleDiary:
                 else:
                     year = today.year - 1
             return datetime.date.fromisocalendar(year, month, day)
-        if timestamp == 't':
+        if timestamp in ['t', 'today', 'now']:
             return datetime.date.today()
-        elif timestamp == 'y':
+        elif timestamp in ['y', 'yesterday']:
             return datetime.date.today() - datetime.timedelta(days=1)
+        elif timestamp == 'epoch':
+            return datetime.date.min
         else:
             days = int(timestamp)  # May raise a ValueError
             return datetime.date.today() - datetime.timedelta(days=days)
@@ -158,51 +160,65 @@ class ConsoleDiary:
             return {**a, **b}
         
         component_patterns = (
-                (r"^:(\w+)$", lambda k, m: combine_dict(k, {"category": m.group(1)})),
-                (r"^\"(\w+)\"$", lambda k, m: combine_dict(k, {"text": m.group(1)})),                
-                (r"^\d+$", lambda kwargs, match: combine_dict(kwargs, {"count": match.group(1)})),
-                (r"^(\w+)?(-(\w+))?$", lambda k, m: combine_dict(combine_dict(k, {"start": m.group(1)}), {"end": m.group(3)})),
+                # Most specific
+                (r"^\#$", "show_id"),
+                (r"^:(\w+)$", "category"),
+                (r"^\"(\w+)\"$", "text"),
+                (r"^\`(\w+)\`$", "word"),
+                (r"^<(\d+)$", "count"),
+                (r"^([\w-]+)$", "timestamp"),
+                # Least specific
         )
 
-        filters = defaultdict(lambda: None, {})
+        filters = {}
         for component in query_components:
-            for pattern, func in component_patterns:
+            for pattern, key in component_patterns:
                 if match := re.match(pattern, component):
-                    filters = func(filters, match)
+                    if key == "show_id":
+                        # Awkward little exception
+                        filters[key] = True
+                    else:
+                        filters[key] = match.group(1)
                     break
             else:
                 # NOTE: 'else' of 'for' triggers when 'for' does not break
                 raise ValueError(f"Search query component {component} does not match any search filter rules, please consult the help")
 
+        filters = defaultdict(lambda: None, filters)
         count = filters['count'] or 0
 
-        if filters['start_date']:
-            start_date = self.interpret_date(filters['start_date'])
-        else:
-            start_date = None
-
         since = False
+        start_date = None
         end_date = None
-        if filters['end_date'] is not None:
-            if filters['end_date']:
-                end_date = self.interpret_date(filters['end_date'])
-                if not start_date:
-                    start_date = end_date
-            else:
-                if not start_date:
-                    start_date = end_date = datetime.date.today()
-                since = True
 
+        if filters['timestamp']:
+            if match := re.match(r"^(\w*)(-?)(\w*)$", filters['timestamp']):
+                try:
+                    end_date = self.interpret_date(match.group(1))
+                except ValueError:
+                    pass  # end_date remains 'None'
+                try:
+                    start_date = self.interpret_date(match.group(3))
+                except ValueError:
+                    pass  # start_date remains 'None'
+
+                if end_date and not start_date and not match.group(2):
+                    # Special case for a single given date - set start and end equal.
+                    start_date = end_date
             
         # Give the user a summary of their query
-        if start_date and since:
-            time_description = f" since {relative_day(start_date)}"
-        elif start_date and end_date and start_date != end_date:
+        if start_date and end_date and start_date != end_date:
+            # Start and end from different dates
             time_description = f" between {relative_day(start_date)} and {relative_day(end_date)}"
-        elif start_date:
+        elif start_date and end_date:
+            # Start and end on the same date
             time_description = f" from {relative_day(start_date)}"
-        elif end_date:
-            time_description = f" until {relative_day(end_date)}"
+        elif start_date and not end_date:
+            # Starts from a set date, never ends - goes up to today
+            time_description = f" since {relative_day(start_date)}"
+        elif end_date and not start_date:
+            # Ends with no start - goes from the first entry up to given time
+            time_description = f" from before {relative_day(end_date)}"
         else:
             time_description = ""
 
