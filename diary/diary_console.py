@@ -43,6 +43,7 @@ COMMANDS = {
         "QUIT": Command('q', 'Quit'),
         "TODAY": Command('t', 'Search for today\'s entries'),
         "YESTERDAY": Command('y', 'Search for yesterday\'s entries'),
+        "CATEGORY_LIST": Command("cl", "List all categories"),
         "CATEGORY_SET": Command('c', QUERY_SET_HELP_TEXT),
         "SEARCH": Command('s', SEARCH_HELP_TEXT),
         "DELETE": Command('d', 'Delete entries. You will always be prompted for confirmation'),
@@ -283,6 +284,10 @@ class ConsoleDiary:
                 self.interpret_search("s y")
             elif input_message.startswith(COMMANDS["DELETE"].invokation):
                 self.interpret_delete(input_message[len(COMMANDS["DELETE"].invokation):])
+            elif input_message.startswith(COMMANDS["CATEGORY_LIST"].invokation):
+                search = input_message[len(COMMANDS["CATEGORY_LIST"].invokation):].strip()
+                for _categoryid, category in self.__diary.get_categories(search):
+                    print(category)
             elif input_message.startswith(COMMANDS["CATEGORY_SET"].invokation):
                 self.category = input_message[len(COMMANDS["CATEGORY_SET"].invokation):].strip()
                 if not self.category:

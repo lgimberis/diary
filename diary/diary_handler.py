@@ -237,14 +237,18 @@ class Diary:
         except sqlite3.OperationalError as e:
             raise sqlite3.OperationalError(f"{e}\nOffending statement: {full_statement}\nValues: {values}\nReport to developer")
 
-    def get_categories(self) -> sqlite3.Cursor:
+    def get_categories(self, contains="") -> sqlite3.Cursor:
         """Get all categories.
 
         Returns a Cursor iterator that yields (categoryid:int, category:str) tuples
         """
 
         statement = "SELECT categoryid, category FROM categories"
-        return self.cur.execute(statement)
+        values = ()
+        if contains:
+            statement += f" WHERE category LIKE ?"
+            values = (f"%{contains}%",)
+        return self.cur.execute(statement, values)
 
     def get_category_id(self, category: str) -> int:
         """Check whether category 'category' is in the table 'categories', and return its rowid if it is.
